@@ -1,0 +1,58 @@
+package jtt809
+
+// VehicleColor 表示车辆颜色编码，参考 JT/T 809 车辆颜色类型。
+const (
+	VehicleColorBlue   byte = 0x01
+	VehicleColorYellow byte = 0x02
+	VehicleColorBlack  byte = 0x03
+	VehicleColorWhite  byte = 0x04
+	VehicleColorOther  byte = 0x09
+)
+
+// SubBusinessType 定义子业务数据类型，截取常用值以支持定位、查岗等业务。
+const (
+	SubMsgRealLocation2011 uint16 = 0x1202 // 实时上传车辆定位信息
+	SubMsgBatchLocation    uint16 = 0x1203 // 车辆定位信息自动补报
+	SubMsgUploadVehicleReg uint16 = 0x1201 // 上传车辆注册信息
+	SubMsgWarnSuperviseReq uint16 = 0x9401 // 报警督办请求
+	SubMsgPlatformQueryAck uint16 = 0x1301 // 平台查岗应答
+	SubMsgTimeTokenReport  uint16 = 0x1701 // 时效口令上报
+
+	// JT/T 1078 子业务
+	SubMsgAuthorizeStartupReq         uint16 = 0x1701 // 视频终端鉴权/启动信息上报 (UP_AUTHORIZE_MSG_STARTUP_REQ)
+	SubMsgRealTimeVideoStartupAck     uint16 = 0x1801 // 实时音视频请求应答 (UP_REAL_VIDEO_MSG_STARTUP_ACK)
+	SubMsgDownRealTimeVideoStartupReq uint16 = 0x9801 // 实时音视频请求 (DOWN_REAL_VIDEO_MSG_STARTUP_REQ)
+)
+
+// WarnSrc 表示报警信息来源。
+type WarnSrc byte
+
+const (
+	WarnSrcVehicle    WarnSrc = 0x01
+	WarnSrcEnterprise WarnSrc = 0x02
+	WarnSrcGovernment WarnSrc = 0x03
+	WarnSrcOther      WarnSrc = 0x09
+)
+
+// WarnType 表示报警类型，列举常见值。
+type WarnType uint16
+
+const (
+	WarnTypeOverspeed              WarnType = 0x0001
+	WarnTypeFatigueDriving         WarnType = 0x0002
+	WarnTypeEmergency              WarnType = 0x0003
+	WarnTypeEnterRegion            WarnType = 0x0004
+	WarnTypeLeaveRegion            WarnType = 0x0005
+	WarnTypeRouteDeviation         WarnType = 0x000B
+	WarnTypeOther                  WarnType = 0x000E
+	WarnTypeTimeoutParking         WarnType = 0xA001
+	WarnTypeUploadIntervalAbnormal WarnType = 0xA002
+)
+
+// SupervisionLevel 表示督办级别。
+type SupervisionLevel byte
+
+const (
+	SupervisionLevelUrgent SupervisionLevel = 0x00
+	SupervisionLevelNormal SupervisionLevel = 0x01
+)

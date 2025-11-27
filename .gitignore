@@ -1,0 +1,7 @@
+/.gocache
+/.goccache
+/server
+/simulator
+/cmd/server/server
+/cmd/simulator/simulator
+/JT*
