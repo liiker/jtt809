@@ -18,10 +18,28 @@ const (
 	SubMsgPlatformQueryAck uint16 = 0x1301 // 平台查岗应答
 	SubMsgTimeTokenReport  uint16 = 0x1701 // 时效口令上报
 
+	// 下行子业务 (上级平台->下级平台)
+	SubMsgApplyForMonitorStartup uint16 = 0x9205 // 启动车辆定位信息交换请求
+	SubMsgApplyForMonitorEnd     uint16 = 0x9206 // 结束车辆定位信息交换请求
+
+	// 上行应答子业务 (下级平台->上级平台)
+	SubMsgApplyForMonitorStartupAck uint16 = 0x1205 // 启动车辆定位信息交换应答
+	SubMsgApplyForMonitorEndAck     uint16 = 0x1206 // 结束车辆定位信息交换应答
+
 	// JT/T 1078 子业务
 	SubMsgAuthorizeStartupReq         uint16 = 0x1701 // 视频终端鉴权/启动信息上报 (UP_AUTHORIZE_MSG_STARTUP_REQ)
 	SubMsgRealTimeVideoStartupAck     uint16 = 0x1801 // 实时音视频请求应答 (UP_REAL_VIDEO_MSG_STARTUP_ACK)
 	SubMsgDownRealTimeVideoStartupReq uint16 = 0x9801 // 实时音视频请求 (DOWN_REAL_VIDEO_MSG_STARTUP_REQ)
+)
+
+// MonitorReasonCode 启动/结束车辆定位信息交换请求原因
+type MonitorReasonCode byte
+
+const (
+	MonitorReasonEnterArea   MonitorReasonCode = 0x00 // 车辆进入指定区域
+	MonitorReasonManual      MonitorReasonCode = 0x01 // 人工指定交换
+	MonitorReasonEmergency   MonitorReasonCode = 0x02 // 应急状态下车辆定位信息回传
+	MonitorReasonOther       MonitorReasonCode = 0x03 // 其它原因
 )
 
 // WarnSrc 表示报警信息来源。

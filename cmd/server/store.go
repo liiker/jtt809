@@ -44,6 +44,8 @@ type VehicleState struct {
 	BatchCount   int
 
 	LastVideoAck *VideoAckState
+	Monitored    bool      // 是否已订阅GPS
+	MonitoredAt  time.Time // 订阅时间
 }
 
 // VehicleRegistration 描述车辆注册上报内容。
@@ -88,6 +90,8 @@ type VehicleSnapshot struct {
 	PositionTime time.Time                   `json:"location_time,omitempty"`
 	BatchCount   int                         `json:"batch_count,omitempty"`
 	LastVideoAck *VideoAckState              `json:"video_ack,omitempty"`
+	Monitored    bool                        `json:"monitored"`
+	MonitoredAt  time.Time                   `json:"monitored_at,omitempty"`
 }
 
 // NewPlatformStore 初始化状态存储。
@@ -265,6 +269,18 @@ func (state *PlatformState) ensureVehicleLocked(key string, number string, color
 	return v
 }
 
+// UpdateMonitorStatus 更新车辆订阅状态
+func (s *PlatformStore) UpdateMonitorStatus(userID uint32, color byte, vehicle string, monitored bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state := s.ensurePlatformLocked(userID)
+	v := state.ensureVehicleLocked(vehicleKey(vehicle, color), vehicle, color)
+	v.Monitored = monitored
+	if monitored {
+		v.MonitoredAt = time.Now()
+	}
+}
+
 func (state *PlatformState) snapshotLocked() PlatformSnapshot {
 	snap := PlatformSnapshot{
 		UserID:        state.UserID,
@@ -283,6 +299,8 @@ func (state *PlatformState) snapshotLocked() PlatformSnapshot {
 			VehicleColor: v.Color,
 			BatchCount:   v.BatchCount,
 			PositionTime: v.PositionTime,
+			Monitored:    v.Monitored,
+			MonitoredAt:  v.MonitoredAt,
 		}
 		if v.Registration != nil {
 			cp := *v.Registration

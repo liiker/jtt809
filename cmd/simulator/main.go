@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/zboyco/jtt809/pkg/jtt809"
+	"github.com/zboyco/jtt809/pkg/jtt809/jt1078"
 )
 
 var (
@@ -19,7 +21,15 @@ var (
 	myIP         = flag.String("ip", "127.0.0.1", "My IP for Sub Link")
 	vehicleNo    = flag.String("vehicle", "粤B12345", "Vehicle Plate Number")
 	vehicleColor = flag.Int("color", 2, "Vehicle Plate Color (1=Black, 2=Blue, 3=Yellow, 4=White, 9=Other)")
-	locationSec  = flag.Int("location", 10, "GPS Location Report Interval in Seconds (0=disabled)")
+	locationSec  = flag.Int("location", 0, "GPS Location Report Interval in Seconds (0=disabled, auto-controlled by monitor request)")
+	videoIP      = flag.String("video-ip", "127.0.0.1", "Video Server IP for mock response")
+	videoPort    = flag.Int("video-port", 8080, "Video Server Port for mock response")
+)
+
+var (
+	gpsMonitored = false
+	gpsTicker    *time.Ticker
+	gpsStopChan  = make(chan struct{})
 )
 
 func main() {
@@ -66,6 +76,7 @@ func main() {
 
 	// Start heartbeat goroutine after login
 	msgSN := uint32(2) // Start from 2, 1 was used for login
+	mainMsgSN = &msgSN
 	go sendMainHeartbeat(conn, &msgSN)
 
 	// 4. Read Loop
@@ -85,15 +96,16 @@ func main() {
 			log.Println("Login Response Received")
 			if !loginSuccess {
 				loginSuccess = true
-				// Send vehicle registration
 				go sendVehicleRegistration(conn, &msgSN)
-				// Start GPS location updates
 				if *locationSec > 0 {
 					go sendLocationUpdates(conn, &msgSN, time.Duration(*locationSec)*time.Second)
 				}
 			}
 		case jtt809.MsgIDHeartbeatResponse:
 			log.Println("Heartbeat Response Received")
+		case jtt809.MsgIDDownRealTimeVideo:
+			log.Println("[Main] Received Video Request (0x9800)")
+			handleVideoRequest(conn, frame, &msgSN)
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -172,6 +184,9 @@ func handleSubLink(conn net.Conn) {
 				Body:   jtt809.SubLinkHeartbeatResponse{},
 			})
 			conn.Write(pkg)
+		case jtt809.MsgIDDownExgMsg:
+			log.Println("[Sub] Received DOWN_EXG_MSG (0x9200)")
+			handleMonitorRequest(conn, frame)
 		}
 	}
 }
@@ -347,6 +362,216 @@ func sendVehicleRegistration(conn net.Conn, msgSN *uint32) {
 	if _, err := conn.Write(pkg); err != nil {
 		log.Printf("Send vehicle registration failed: %v", err)
 	}
+}
+
+// handleVideoRequest 处理上级平台的实时视频请求
+func handleVideoRequest(conn net.Conn, frame *jtt809.Frame, msgSN *uint32) {
+	// 解析子业务消息
+	subPkt, err := jtt809.ParseSubBusiness(frame.RawBody)
+	if err != nil {
+		log.Printf("[Main] Parse video request failed: %v", err)
+		return
+	}
+
+	// 验证子业务ID
+	if subPkt.SubBusinessID != jtt809.SubMsgDownRealTimeVideoStartupReq {
+		log.Printf("[Main] Unexpected sub business ID: 0x%04X, expected 0x9801", subPkt.SubBusinessID)
+		return
+	}
+
+	// 解析视频请求
+	req, err := jt1078.ParseDownRealTimeVideoStartupReq(subPkt.Payload)
+	if err != nil {
+		log.Printf("[Main] Parse video startup request failed: %v", err)
+		return
+	}
+
+	log.Printf("[Main] Video Request: Vehicle=%s, Color=%d, Channel=%d, AVType=%d, AuthCode=%s",
+		subPkt.Plate, subPkt.Color, req.ChannelID, req.AVItemType, req.AuthorizeCode)
+
+	// 构造应答
+	ack := jt1078.RealTimeVideoStartupAck{
+		Result:     0, // 0表示成功
+		ServerIP:   *videoIP,
+		ServerPort: uint16(*videoPort),
+	}
+
+	ackPayload, err := ack.Encode()
+	if err != nil {
+		log.Printf("[Main] Encode video ack failed: %v", err)
+		return
+	}
+
+	// 构建子业务消息体
+	subBody, err := buildSubBusinessBody(subPkt.Plate, subPkt.Color, jtt809.SubMsgRealTimeVideoStartupAck, ackPayload)
+	if err != nil {
+		log.Printf("[Main] Build sub business body failed: %v", err)
+		return
+	}
+
+	// 构建完整消息包
+	pkg, err := jtt809.EncodePackage(jtt809.Package{
+		Header: jtt809.Header{
+			MsgSN:        *msgSN,
+			BusinessType: jtt809.MsgIDRealTimeVideo,
+			GNSSCenterID: frame.Header.GNSSCenterID,
+			Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
+		},
+		Body: rawBody{
+			msgID:   jtt809.MsgIDRealTimeVideo,
+			payload: subBody,
+		},
+	})
+	if err != nil {
+		log.Printf("[Main] Encode video response package failed: %v", err)
+		return
+	}
+	*msgSN++
+
+	// 发送应答
+	if _, err := conn.Write(pkg); err != nil {
+		log.Printf("[Main] Send video response failed: %v", err)
+		return
+	}
+
+	log.Printf("[Main] Video Response Sent: Result=Success, Server=%s:%d", *videoIP, *videoPort)
+}
+
+// rawBody 允许直接注入编码好的业务体
+type rawBody struct {
+	msgID   uint16
+	payload []byte
+}
+
+func (r rawBody) MsgID() uint16 { return r.msgID }
+
+func (r rawBody) Encode() ([]byte, error) {
+	return r.payload, nil
+}
+
+// buildSubBusinessBody 构建子业务消息体（车牌号+颜色+子业务ID+长度+载荷）
+func buildSubBusinessBody(plate string, color byte, subID uint16, payload []byte) ([]byte, error) {
+	plateBytes, err := jtt809.EncodeGBK(plate)
+	if err != nil {
+		return nil, fmt.Errorf("encode plate: %w", err)
+	}
+	buf := make([]byte, 0, 21+1+2+4+len(payload))
+	field := make([]byte, 21)
+	copy(field, plateBytes)
+	buf = append(buf, field...)
+	buf = append(buf, color)
+	var tmp [2]byte
+	binary.BigEndian.PutUint16(tmp[:], subID)
+	buf = append(buf, tmp[:]...)
+	length := make([]byte, 4)
+	binary.BigEndian.PutUint32(length, uint32(len(payload)))
+	buf = append(buf, length...)
+	buf = append(buf, payload...)
+	return buf, nil
+}
+
+// handleMonitorRequest 处理车辆定位信息交换请求
+func handleMonitorRequest(conn net.Conn, frame *jtt809.Frame) {
+	subPkt, err := jtt809.ParseSubBusiness(frame.RawBody)
+	if err != nil {
+		log.Printf("[Sub] Parse monitor request failed: %v", err)
+		return
+	}
+
+	var ackSubID uint16
+	var action string
+	switch subPkt.SubBusinessID {
+	case jtt809.SubMsgApplyForMonitorStartup:
+		ackSubID = jtt809.SubMsgApplyForMonitorStartupAck
+		action = "startup"
+		startGPSReporting(conn)
+	case jtt809.SubMsgApplyForMonitorEnd:
+		ackSubID = jtt809.SubMsgApplyForMonitorEndAck
+		action = "end"
+		stopGPSReporting()
+	default:
+		log.Printf("[Sub] Unknown monitor sub business: 0x%04X", subPkt.SubBusinessID)
+		return
+	}
+
+	log.Printf("[Sub] Monitor %s request: Vehicle=%s, Color=%d", action, subPkt.Plate, subPkt.Color)
+
+	ackPayload := []byte{0x00}
+	ackBody, _ := buildSubBusinessBody(subPkt.Plate, subPkt.Color, ackSubID, ackPayload)
+
+	pkg, _ := jtt809.EncodePackage(jtt809.Package{
+		Header: jtt809.Header{
+			MsgSN:        frame.Header.MsgSN + 1,
+			BusinessType: jtt809.MsgIDDynamicInfo,
+			GNSSCenterID: frame.Header.GNSSCenterID,
+			Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
+		},
+		Body: rawBody{
+			msgID:   jtt809.MsgIDDynamicInfo,
+			payload: ackBody,
+		},
+	})
+	conn.Write(pkg)
+	log.Printf("[Sub] Monitor %s ack sent: Result=Success", action)
+}
+
+var mainConn net.Conn
+var mainMsgSN *uint32
+
+func startGPSReporting(conn net.Conn) {
+	if gpsMonitored {
+		return
+	}
+	gpsMonitored = true
+	mainConn = conn
+	log.Println("[GPS] Starting GPS reporting (5s interval)")
+	go func() {
+		gps := NewGPSSimulator()
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if !gpsMonitored {
+					return
+				}
+				sendGPSLocation(gps)
+			case <-gpsStopChan:
+				return
+			}
+		}
+	}()
+}
+
+func stopGPSReporting() {
+	if !gpsMonitored {
+		return
+	}
+	gpsMonitored = false
+	log.Println("[GPS] Stopping GPS reporting")
+}
+
+func sendGPSLocation(gps *GPSSimulator) {
+	if mainConn == nil || mainMsgSN == nil {
+		return
+	}
+	position := gps.Next()
+	upload := jtt809.VehicleLocationUpload{
+		VehicleNo:    *vehicleNo,
+		VehicleColor: byte(*vehicleColor),
+		Position:     position,
+	}
+	pkg, _ := jtt809.EncodePackage(jtt809.Package{
+		Header: jtt809.Header{
+			MsgSN:        *mainMsgSN,
+			BusinessType: jtt809.MsgIDDynamicInfo,
+			Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
+		},
+		Body: upload,
+	})
+	*mainMsgSN++
+	mainConn.Write(pkg)
+	log.Printf("[GPS] Location sent: Lon=%.6f, Lat=%.6f", float64(position.Lon)/1e6, float64(position.Lat)/1e6)
 }
 
 // sendLocationUpdates 定期发送GPS定位数据

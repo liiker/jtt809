@@ -20,6 +20,8 @@ func (g *JT809Gateway) startHTTPServer(ctx context.Context) {
 	mux.HandleFunc("/healthz", g.handleHealth)
 	mux.HandleFunc("/api/platforms", g.handlePlatforms)
 	mux.HandleFunc("/api/video/request", g.handleVideoRequest)
+	mux.HandleFunc("/api/monitor/startup", g.handleMonitorStartup)
+	mux.HandleFunc("/api/monitor/end", g.handleMonitorEnd)
 
 	g.httpSrv = &http.Server{
 		Addr:    g.cfg.HTTPListen,
@@ -78,6 +80,42 @@ func (g *JT809Gateway) handleVideoRequest(w http.ResponseWriter, r *http.Request
 		req.ChannelID = 1
 	}
 	if err := g.RequestVideoStream(req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "sent"})
+}
+
+func (g *JT809Gateway) handleMonitorStartup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	defer r.Body.Close()
+	var req MonitorRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := g.RequestMonitorStartup(req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "sent"})
+}
+
+func (g *JT809Gateway) handleMonitorEnd(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	defer r.Body.Close()
+	var req MonitorRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := g.RequestMonitorEnd(req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

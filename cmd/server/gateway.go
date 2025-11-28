@@ -412,6 +412,24 @@ func (g *JT809Gateway) handleDynamicInfo(session *goserver.AppSession, frame *jt
 			ServerPort: ack.ServerPort,
 		})
 		slog.Info("video stream ack", "user_id", user, "plate", pkt.Plate, "server", ack.ServerIP, "port", ack.ServerPort, "result", ack.Result)
+	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorStartupAck:
+		result, err := jtt809.ParseMonitorAck(pkt.Payload)
+		if err != nil {
+			slog.Warn("parse monitor startup ack failed", "session", session.ID, "err", err)
+			return
+		}
+		g.store.UpdateMonitorStatus(user, pkt.Color, pkt.Plate, result == jtt809.MonitorAckSuccess)
+		slog.Info("monitor startup ack", "user_id", user, "plate", pkt.Plate, "result", result)
+	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorEndAck:
+		result, err := jtt809.ParseMonitorAck(pkt.Payload)
+		if err != nil {
+			slog.Warn("parse monitor end ack failed", "session", session.ID, "err", err)
+			return
+		}
+		if result == jtt809.MonitorAckSuccess {
+			g.store.UpdateMonitorStatus(user, pkt.Color, pkt.Plate, false)
+		}
+		slog.Info("monitor end ack", "user_id", user, "plate", pkt.Plate, "result", result)
 	default:
 		slog.Debug("unhandled dynamic sub business", "user_id", user, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
 	}

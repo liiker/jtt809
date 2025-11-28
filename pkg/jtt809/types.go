@@ -27,6 +27,9 @@ const (
 	MsgIDLogoutRequest     uint16 = 0x1003
 	MsgIDLogoutResponse    uint16 = 0x1004
 
+	// 从链路下行业务
+	MsgIDDownExgMsg uint16 = 0x9200 // 从链路车辆动态信息交换业务
+
 	// JT/T 1078 视频业务
 	MsgIDAuthorize         uint16 = 0x1700 // 视频相关鉴权
 	MsgIDRealTimeVideo     uint16 = 0x1800 // 实时音视频

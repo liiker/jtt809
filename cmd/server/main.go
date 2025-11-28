@@ -75,7 +75,9 @@ func printStartupInfo(cfg Config) {
 		fmt.Println("\n🌐 HTTP管理接口:")
 		fmt.Printf("  ├─ 健康检查:     GET  http://%s/healthz\n", cfg.HTTPListen)
 		fmt.Printf("  ├─ 平台状态:     GET  http://%s/api/platforms\n", cfg.HTTPListen)
-		fmt.Printf("  └─ 请求视频流:   POST http://%s/api/video/request\n", cfg.HTTPListen)
+		fmt.Printf("  ├─ 请求视频流:   POST http://%s/api/video/request\n", cfg.HTTPListen)
+		fmt.Printf("  ├─ 订阅车辆GPS:  POST http://%s/api/monitor/startup\n", cfg.HTTPListen)
+		fmt.Printf("  └─ 取消订阅GPS:  POST http://%s/api/monitor/end\n", cfg.HTTPListen)
 	}
 
 	fmt.Println("\n" + strings.Repeat("=", 80))
