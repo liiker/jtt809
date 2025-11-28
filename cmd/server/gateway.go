@@ -50,6 +50,7 @@ func (g *JT809Gateway) Start(ctx context.Context) error {
 		}
 		go g.mainSrv.Start()
 		g.startHTTPServer(ctx)
+		go g.healthCheckLoop(ctx)
 	})
 	if startErr != nil {
 		return startErr
@@ -158,24 +159,48 @@ func (g *JT809Gateway) handleMainLogin(session *goserver.AppSession, frame *jtt8
 		session.SetAttr("userID", req.UserID)
 		session.SetAttr("link", "main")
 		session.SetAttr("version", acc.Version) // Store version in session
-		g.store.BindMainSession(session.ID, req)
+		g.store.BindMainSession(session.ID, req, acc.Password)
 		if _, err := session.GetAttr("verifyCode"); err != nil {
 			session.SetAttr("verifyCode", acc.VerifyCode)
 		}
 		// Start Sub Link Connection
-		go g.connectSubLink(req.DownLinkIP, req.DownLinkPort, req.UserID, acc.Password)
+		go g.connectSubLinkWithRetry(req.DownLinkIP, req.DownLinkPort, req.UserID, acc.Password)
 	}
 	return g.simpleResponse(session, "main", frame, resp)
 }
 
-func (g *JT809Gateway) connectSubLink(ip string, port uint16, userID uint32, password string) {
-	addr := fmt.Sprintf("%s:%d", ip, port)
+func (g *JT809Gateway) connectSubLinkWithRetry(ip string, port uint16, userID uint32, password string) {
+	// 设置重连标志，如果已经在重连则直接返回
+	if !g.store.SetReconnecting(userID, true) {
+		slog.Info("sub link already reconnecting, skip", "user_id", userID)
+		return
+	}
+	defer g.store.SetReconnecting(userID, false)
+
+	for {
+		// 检查主链路是否仍然活跃
+		snap, ok := g.store.Snapshot(userID)
+		if !ok || snap.MainSessionID == "" {
+			slog.Info("main link not active, stop reconnecting", "user_id", userID)
+			return
+		}
+
+		if g.connectSubLink(ip, port, userID, password) {
+			return
+		}
+		time.Sleep(30 * time.Second)
+		slog.Info("retrying sub link connection", "user_id", userID)
+	}
+}
+
+func (g *JT809Gateway) connectSubLink(ip string, port uint16, userID uint32, password string) bool {
+	addr := net.JoinHostPort(ip, fmt.Sprintf("%d", port))
 	slog.Info("connecting sub link", "addr", addr, "user_id", userID)
 
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		slog.Error("connect sub link failed", "addr", addr, "err", err)
-		return
+		return false
 	}
 
 	// Send Login
@@ -194,7 +219,7 @@ func (g *JT809Gateway) connectSubLink(ip string, port uint16, userID uint32, pas
 	if _, err := conn.Write(pkg); err != nil {
 		slog.Error("send sub login failed", "err", err)
 		conn.Close()
-		return
+		return false
 	}
 
 	// Read Response
@@ -205,7 +230,7 @@ func (g *JT809Gateway) connectSubLink(ip string, port uint16, userID uint32, pas
 	if !scanner.Scan() {
 		slog.Error("read sub login response failed", "err", scanner.Err())
 		conn.Close()
-		return
+		return false
 	}
 	respData := scanner.Bytes()
 	g.logPacket("sub", "recv", fmt.Sprintf("%d", userID), respData)
@@ -214,20 +239,20 @@ func (g *JT809Gateway) connectSubLink(ip string, port uint16, userID uint32, pas
 	if err != nil {
 		slog.Error("decode sub login response failed", "err", err)
 		conn.Close()
-		return
+		return false
 	}
 
 	if frame.BodyID != 0x9002 {
 		slog.Error("unexpected sub login response", "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
 		conn.Close()
-		return
+		return false
 	}
 
 	loginResp, err := jtt809.ParseSubLinkLoginResponse(frame)
 	if err != nil {
 		slog.Error("parse sub login response failed", "err", err)
 		conn.Close()
-		return
+		return false
 	}
 
 	// 校验接入码
@@ -250,33 +275,77 @@ func (g *JT809Gateway) connectSubLink(ip string, port uint16, userID uint32, pas
 	if loginResp.Result != 0 {
 		slog.Error("sub link login refused", "result", loginResp.Result)
 		conn.Close()
-		return
+		return false
 	}
 
 	slog.Info("sub link connected and logged in", "user_id", userID)
 	g.store.BindSubSession(userID, conn)
 
-	go g.readSubLinkLoop(conn, userID, scanner)
+	go g.readSubLinkLoop(conn, userID, scanner, true)
 	go g.keepAliveSubLink(conn, userID)
+	return true
 }
 
-func (g *JT809Gateway) readSubLinkLoop(conn net.Conn, userID uint32, scanner *bufio.Scanner) {
-	defer conn.Close()
+func (g *JT809Gateway) readSubLinkLoop(conn net.Conn, userID uint32, scanner *bufio.Scanner, shouldReconnect bool) {
+	defer func() {
+		conn.Close()
+		g.store.ClearSubConn(userID)
+		slog.Info("sub link closed", "user_id", userID)
+		// 仅在需要重连时触发
+		if shouldReconnect {
+			go g.reconnectSubLink(userID)
+		}
+	}()
 	for scanner.Scan() {
 		g.handleSubMessage(userID, scanner.Bytes())
 	}
 	if err := scanner.Err(); err != nil {
 		slog.Error("sub link read error", "user_id", userID, "err", err)
 	}
-	slog.Info("sub link closed", "user_id", userID)
+}
+
+func (g *JT809Gateway) reconnectSubLink(userID uint32) {
+	time.Sleep(5 * time.Second)
+	snap, ok := g.store.Snapshot(userID)
+	if !ok || snap.MainSessionID == "" {
+		slog.Info("skip sub link reconnect, main link not active", "user_id", userID)
+		return
+	}
+	slog.Info("attempting sub link reconnect", "user_id", userID)
+	g.connectSubLinkWithRetry(snap.DownLinkIP, snap.DownLinkPort, userID, snap.Password)
+}
+
+func (g *JT809Gateway) healthCheckLoop(ctx context.Context) {
+	ticker := time.NewTicker(60 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			g.checkConnections()
+		}
+	}
+}
+
+func (g *JT809Gateway) checkConnections() {
+	snapshots := g.store.Snapshots()
+	for _, snap := range snapshots {
+		if snap.MainSessionID == "" {
+			continue
+		}
+		// 检查从链路是否需要重连
+		if !snap.SubConnected && snap.DownLinkIP != "" && snap.DownLinkPort > 0 {
+			slog.Warn("sub link disconnected, triggering reconnect", "user_id", snap.UserID)
+			go g.connectSubLinkWithRetry(snap.DownLinkIP, snap.DownLinkPort, snap.UserID, snap.Password)
+		}
+	}
 }
 
 func (g *JT809Gateway) keepAliveSubLink(conn net.Conn, userID uint32) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
-		// Check if conn is still valid/open?
-		// If read loop closes conn, Write will fail.
 		hb, _ := jtt809.BuildSubLinkHeartbeat(jtt809.Header{
 			MsgSN:   0, // TODO: maintain SN
 			Version: jtt809.Version{Major: 1, Minor: 0, Patch: 0},
@@ -284,6 +353,8 @@ func (g *JT809Gateway) keepAliveSubLink(conn net.Conn, userID uint32) {
 		g.logPacket("sub", "send", fmt.Sprintf("%d", userID), hb)
 		if _, err := conn.Write(hb); err != nil {
 			slog.Warn("send sub heartbeat failed", "user_id", userID, "err", err)
+			// 心跳失败，主动关闭连接以触发readSubLinkLoop退出
+			conn.Close()
 			return
 		}
 	}

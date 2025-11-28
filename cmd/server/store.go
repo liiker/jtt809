@@ -24,6 +24,8 @@ type PlatformState struct {
 	DownLinkPort  uint16
 	MainSessionID string
 	SubConn       net.Conn
+	Password      string // 用于从链路重连
+	Reconnecting  bool   // 是否正在重连，防止重复重连
 
 	LastMainHeartbeat time.Time
 	LastSubHeartbeat  time.Time
@@ -75,6 +77,7 @@ type PlatformSnapshot struct {
 	DownLinkPort  uint16            `json:"down_link_port"`
 	MainSessionID string            `json:"main_session_id"`
 	SubConnected  bool              `json:"sub_connected"`
+	Password      string            `json:"-"` // 不对外暴露
 	LastMainBeat  time.Time         `json:"last_main_heartbeat"`
 	LastSubBeat   time.Time         `json:"last_sub_heartbeat"`
 	Vehicles      []VehicleSnapshot `json:"vehicles"`
@@ -103,7 +106,7 @@ func NewPlatformStore() *PlatformStore {
 }
 
 // BindMainSession 在主链路登录成功后建立会话映射。
-func (s *PlatformStore) BindMainSession(sessionID string, req jtt809.LoginRequest) {
+func (s *PlatformStore) BindMainSession(sessionID string, req jtt809.LoginRequest, password string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state := s.ensurePlatformLocked(req.UserID)
@@ -113,6 +116,7 @@ func (s *PlatformStore) BindMainSession(sessionID string, req jtt809.LoginReques
 	state.DownLinkIP = req.DownLinkIP
 	state.DownLinkPort = req.DownLinkPort
 	state.MainSessionID = sessionID
+	state.Password = password
 	state.LastMainHeartbeat = time.Now()
 	s.sessionIndex[sessionID] = req.UserID
 }
@@ -144,25 +148,32 @@ func (s *PlatformStore) RecordHeartbeat(userID uint32, isMain bool) {
 // RemoveSession 在连接关闭时清理索引。
 func (s *PlatformStore) RemoveSession(sessionID string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	userID, ok := s.sessionIndex[sessionID]
 	if !ok {
+		s.mu.Unlock()
 		return
 	}
 	state := s.platforms[userID]
 	if state == nil {
 		delete(s.sessionIndex, sessionID)
+		s.mu.Unlock()
 		return
 	}
+	var connToClose net.Conn
 	if state.MainSessionID == sessionID {
 		state.MainSessionID = ""
-	}
-	if state.SubConn != nil {
-		// 这里我们无法通过 sessionID 判断是哪个 subConn，因为 subConn 没有 sessionID
-		// 但 RemoveSession 是由 go-server 回调触发的，通常只针对 MainSession (因为 SubSrv 被移除了)
-		// 所以这里只需要处理 MainSessionID
+		// 保存连接引用，在锁外关闭以避免死锁
+		// 主链路断开时，从链路不需要重连
+		connToClose = state.SubConn
+		state.SubConn = nil
 	}
 	delete(s.sessionIndex, sessionID)
+	s.mu.Unlock()
+
+	// 在锁外关闭连接，避免与readSubLinkLoop的defer中的ClearSubConn死锁
+	if connToClose != nil {
+		connToClose.Close()
+	}
 }
 
 // UpdateVehicleRegistration 存储车辆注册信息。
@@ -243,6 +254,31 @@ func (s *PlatformStore) PlatformForSession(sessionID string) (uint32, bool) {
 	return user, ok
 }
 
+// ClearSubConn 清理从链路连接状态
+func (s *PlatformStore) ClearSubConn(userID uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if state, ok := s.platforms[userID]; ok {
+		state.SubConn = nil
+	}
+}
+
+// SetReconnecting 设置重连标志
+func (s *PlatformStore) SetReconnecting(userID uint32, reconnecting bool) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, ok := s.platforms[userID]
+	if !ok {
+		return false
+	}
+	// 如果已经在重连，返回false表示不应该启动新的重连
+	if reconnecting && state.Reconnecting {
+		return false
+	}
+	state.Reconnecting = reconnecting
+	return true
+}
+
 func (s *PlatformStore) ensurePlatformLocked(userID uint32) *PlatformState {
 	state, ok := s.platforms[userID]
 	if ok {
@@ -289,6 +325,7 @@ func (state *PlatformState) snapshotLocked() PlatformSnapshot {
 		DownLinkPort:  state.DownLinkPort,
 		MainSessionID: state.MainSessionID,
 		SubConnected:  state.SubConn != nil,
+		Password:      state.Password,
 		LastMainBeat:  state.LastMainHeartbeat,
 		LastSubBeat:   state.LastSubHeartbeat,
 		Vehicles:      make([]VehicleSnapshot, 0, len(state.Vehicles)),
