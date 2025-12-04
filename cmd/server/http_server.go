@@ -2,15 +2,20 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/zboyco/jtt809/pkg/jtt809"
 )
+
+//go:embed web
+var webFS embed.FS
 
 func (g *JT809Gateway) startHTTPServer(ctx context.Context) {
 	if g.cfg.HTTPListen == "" {
@@ -20,8 +25,14 @@ func (g *JT809Gateway) startHTTPServer(ctx context.Context) {
 	mux.HandleFunc("/healthz", g.handleHealth)
 	mux.HandleFunc("/api/platforms", g.handlePlatforms)
 	mux.HandleFunc("/api/video/request", g.handleVideoRequest)
-	mux.HandleFunc("/api/monitor/startup", g.handleMonitorStartup)
-	mux.HandleFunc("/api/monitor/end", g.handleMonitorEnd)
+
+	// 嵌入的静态文件服务
+	webContent, err := fs.Sub(webFS, "web")
+	if err != nil {
+		slog.Error("failed to load embedded web files", "err", err)
+	} else {
+		mux.Handle("/ui/", http.StripPrefix("/ui/", http.FileServer(http.FS(webContent))))
+	}
 
 	g.httpSrv = &http.Server{
 		Addr:    g.cfg.HTTPListen,
@@ -80,60 +91,6 @@ func (g *JT809Gateway) handleVideoRequest(w http.ResponseWriter, r *http.Request
 		req.ChannelID = 1
 	}
 	if err := g.RequestVideoStream(req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, map[string]string{"status": "sent"})
-}
-
-func (g *JT809Gateway) handleMonitorStartup(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	defer r.Body.Close()
-	var req MonitorRequest
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := g.RequestMonitorStartup(req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	writeJSON(w, map[string]string{"status": "sent"})
-}
-
-// func (g *JT809Gateway) handleAuthorizeRequest(w http.ResponseWriter, r *http.Request) { // Removed
-// 	if r.Method != http.MethodPost {
-// 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-// 		return
-// 	}
-// 	defer r.Body.Close()
-// 	var req AuthorizeRequest
-// 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-// 		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
-// 		return
-// 	}
-// 	if err := g.RequestAuthorizeCode(req); err != nil {
-// 		http.Error(w, err.Error(), http.StatusBadRequest)
-// 		return
-// 	}
-// 	writeJSON(w, map[string]string{"status": "sent"})
-// }
-
-func (g *JT809Gateway) handleMonitorEnd(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	defer r.Body.Close()
-	var req MonitorRequest
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
-		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := g.RequestMonitorEnd(req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

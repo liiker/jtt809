@@ -44,18 +44,26 @@ func (a ApplyForMonitorEnd) Encode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// MonitorAckResult 车辆定位信息交换应答结果
-type MonitorAckResult byte
-
-const (
-	MonitorAckSuccess MonitorAckResult = 0x00 // 成功
-	MonitorAckFailure MonitorAckResult = 0x01 // 失败
-)
+// MonitorAck 车辆定位信息交换应答 (0x1205/0x1206)
+type MonitorAck struct {
+	SourceDataType uint16 // 对应启动车辆定位信息交换请求消息源子业务类型标识
+	SourceMsgSN    uint32 // 对应启动车辆定位信息交换请求消息源报文序列号
+	DataLength     uint32 // 后续数据长度，值为0x00
+}
 
 // ParseMonitorAck 解析车辆定位信息交换应答 (0x1205/0x1206)
-func ParseMonitorAck(payload []byte) (MonitorAckResult, error) {
-	if len(payload) < 1 {
-		return 0, errors.New("payload too short")
+// 注意：部分下级平台实现不完整，可能只发送 6 字节（缺少 DataLength 字段）
+func ParseMonitorAck(payload []byte) (*MonitorAck, error) {
+	if len(payload) < 6 {
+		return nil, errors.New("payload too short, expected at least 6 bytes")
 	}
-	return MonitorAckResult(payload[0]), nil
+	ack := &MonitorAck{
+		SourceDataType: binary.BigEndian.Uint16(payload[0:2]),
+		SourceMsgSN:    binary.BigEndian.Uint32(payload[2:6]),
+	}
+	// DataLength 字段是可选的，部分下级平台实现可能不发送
+	if len(payload) >= 10 {
+		ack.DataLength = binary.BigEndian.Uint32(payload[6:10])
+	}
+	return ack, nil
 }

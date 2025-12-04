@@ -42,7 +42,7 @@ func TestParseVehicleRegistration(t *testing.T) {
 
 	t.Run("Parse 2019 payload", func(t *testing.T) {
 		payload := createPayload("Plat2", "Prod2", "Model2", "IMEI2", "TID2", "SIM2")
-		reg, err := parseVehicleRegistration(payload)
+		reg, err := jtt809.ParseVehicleRegistration(payload)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -56,7 +56,7 @@ func TestParseVehicleRegistration(t *testing.T) {
 
 	t.Run("Payload too short", func(t *testing.T) {
 		payload := []byte{0x01, 0x02}
-		if _, err := parseVehicleRegistration(payload); err == nil {
+		if _, err := jtt809.ParseVehicleRegistration(payload); err == nil {
 			t.Error("expected error for short payload")
 		}
 	})

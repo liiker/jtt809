@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JT/T 809 平台监控系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 28px;
+            font-weight: 600;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 2px solid #e2e8f0;
+        }
+
+        .auto-refresh label {
+            font-size: 14px;
+            color: #4a5568;
+            font-weight: 500;
+        }
+
+        .auto-refresh select {
+            padding: 6px 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            background: white;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e0;
+            transition: 0.4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #48bb78;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card .label {
+            color: #718096;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .stat-card .value {
+            color: #2d3748;
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        .platforms {
+            display: grid;
+            gap: 20px;
+        }
+
+        .platform-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .platform-card:hover {
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .platform-header {
+            padding: 24px;
+            user-select: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            align-items: start;
+        }
+
+        .platform-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .platform-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2d3748;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .platform-id {
+            font-size: 14px;
+            color: #718096;
+        }
+
+        .status-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .status-dot.online {
+            background: #48bb78;
+            box-shadow: 0 0 8px rgba(72, 187, 120, 0.5);
+        }
+
+        .status-dot.offline {
+            background: #f56565;
+        }
+
+        .status-label {
+            color: #4a5568;
+            font-weight: 500;
+        }
+
+        .status-value {
+            color: #718096;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .badge-danger {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .badge-info {
+            background: #bee3f8;
+            color: #2c5282;
+        }
+
+        .expand-icon {
+            transition: transform 0.3s;
+            font-size: 20px;
+            color: #a0aec0;
+        }
+
+        .platform-card.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .vehicles-section {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .platform-card.expanded .vehicles-section {
+            max-height: 2000px;
+        }
+
+        .vehicles-container {
+            padding: 0 24px 24px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .vehicles-header {
+            padding: 16px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .vehicles-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .vehicles-table thead {
+            background: #f7fafc;
+        }
+
+        .vehicles-table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #4a5568;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .vehicles-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #2d3748;
+        }
+
+        .vehicles-table tbody tr:hover {
+            background: #f7fafc;
+        }
+
+        .vehicle-color {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .color-1 { background: #3182ce; color: white; }
+        .color-2 { background: #ecc94b; color: #2d3748; }
+        .color-3 { background: #2d3748; color: white; }
+        .color-4 { background: #f7fafc; color: #2d3748; border: 1px solid #cbd5e0; }
+        .color-5 { background: #48bb78; color: white; }
+        .color-9 { background: #a0aec0; color: white; }
+        .color-91 { background: #d69e2e; color: white; }
+        .color-92 { background: #38a169; color: white; }
+        .color-93 { background: #9ae6b4; color: #2d3748; }
+        .color-94 { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #a0aec0;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 18px;
+        }
+
+        .time {
+            color: #718096;
+            font-size: 13px;
+        }
+
+        .coord {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .controls {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .btn, .auto-refresh {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .platform-header {
+                grid-template-columns: 1fr;
+            }
+
+            .vehicles-table {
+                font-size: 12px;
+            }
+
+            .vehicles-table th,
+            .vehicles-table td {
+                padding: 8px 4px;
+            }
+        }
+
+        .heartbeat-info {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 4px;
+        }
+
+        .link-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .link-info-item {
+            font-size: 13px;
+            color: #4a5568;
+        }
+
+        .link-info-label {
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .copy-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 6px;
+            margin-left: 6px;
+            background: #e2e8f0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #4a5568;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: #cbd5e0;
+            color: #2d3748;
+        }
+
+        .copy-btn:active {
+            transform: scale(0.95);
+        }
+
+        .copy-btn.copied {
+            background: #48bb78;
+            color: white;
+        }
+
+        .copyable {
+            display: inline-flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 JT/T 809 平台监控系统</h1>
+            <div class="controls">
+                <div class="auto-refresh">
+                    <label class="switch">
+                        <input type="checkbox" id="autoRefreshToggle" checked>
+                        <span class="slider"></span>
+                    </label>
+                    <label for="autoRefreshToggle">自动刷新</label>
+                    <select id="refreshInterval">
+                        <option value="5">5秒</option>
+                        <option value="10" selected>10秒</option>
+                        <option value="30">30秒</option>
+                        <option value="60">60秒</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="loadData()">
+                    <span>🔄</span>
+                    <span>立即刷新</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="label">在线平台</div>
+                <div class="value" id="onlinePlatforms">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">总平台数</div>
+                <div class="value" id="totalPlatforms">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">总车辆数</div>
+                <div class="value" id="totalVehicles">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">监控中车辆</div>
+                <div class="value" id="monitoredVehicles">0</div>
+            </div>
+        </div>
+
+        <div id="platformsContainer" class="platforms">
+            <div class="loading">正在加载数据...</div>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshTimer = null;
+
+        // 车牌颜色映射
+        const vehicleColorMap = {
+            1: { name: '蓝色', class: 'color-1' },
+            2: { name: '黄色', class: 'color-2' },
+            3: { name: '黑色', class: 'color-3' },
+            4: { name: '白色', class: 'color-4' },
+            5: { name: '绿色', class: 'color-5' },
+            9: { name: '其他', class: 'color-9' },
+            0x91: { name: '农黄色', class: 'color-91' },
+            0x92: { name: '农绿色', class: 'color-92' },
+            0x93: { name: '黄绿色', class: 'color-93' },
+            0x94: { name: '渐变绿', class: 'color-94' }
+        };
+
+        // 复制到剪贴板
+        function copyToClipboard(text, button) {
+            // 阻止事件冒泡，避免触发父元素的点击事件
+            event.stopPropagation();
+
+            // 尝试使用现代 Clipboard API
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showCopySuccess(button);
+                }).catch(err => {
+                    console.error('Clipboard API 失败:', err);
+                    fallbackCopy(text, button);
+                });
+            } else {
+                // 降级方案：使用传统方法
+                fallbackCopy(text, button);
+            }
+        }
+
+        // 显示复制成功
+        function showCopySuccess(button) {
+            const originalText = button.textContent;
+            button.textContent = '✓';
+            button.classList.add('copied');
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.classList.remove('copied');
+            }, 2000);
+        }
+
+        // 降级复制方案
+        function fallbackCopy(text, button) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showCopySuccess(button);
+                } else {
+                    alert('复制失败，请手动复制：' + text);
+                }
+            } catch (err) {
+                console.error('降级复制失败:', err);
+                alert('复制失败，请手动复制：' + text);
+            }
+            document.body.removeChild(textarea);
+        }
+
+        // 创建复制按钮
+        function createCopyButton(text) {
+            return `<button class="copy-btn" onclick="copyToClipboard('${text}', this)" title="复制">📋</button>`;
+        }
+
+        // 格式化时间
+        function formatTime(timeStr) {
+            if (!timeStr || timeStr === '0001-01-01T00:00:00Z') {
+                return '从未';
+            }
+            const date = new Date(timeStr);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+
+            if (diff < 60) return `${diff}秒前`;
+            if (diff < 3600) return `${Math.floor(diff / 60)}分钟前`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}小时前`;
+            if (diff < 604800) return `${Math.floor(diff / 86400)}天前`;
+
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // 格式化坐标
+        function formatCoord(value) {
+            return value ? value.toFixed(6) : 'N/A';
+        }
+
+        // 获取车牌颜色信息
+        function getVehicleColor(color) {
+            return vehicleColorMap[color] || { name: '未知', class: 'color-4' };
+        }
+
+        // 渲染车辆表格
+        function renderVehicles(vehicles) {
+            if (!vehicles || vehicles.length === 0) {
+                return '<div class="empty-state"><div class="empty-state-icon">📭</div><div>暂无车辆数据</div></div>';
+            }
+
+            // 按照注册时间倒序排序（最新注册的在前）
+            const sortedVehicles = [...vehicles].sort((a, b) => {
+                // 兼容不同的字段名格式
+                const timeA = a.registration?.ReceivedAt || a.registration?.received_at ||
+                             a.registration?.receivedAt || '';
+                const timeB = b.registration?.ReceivedAt || b.registration?.received_at ||
+                             b.registration?.receivedAt || '';
+
+                // 如果都没有注册时间，按车牌号排序
+                if (!timeA && !timeB) {
+                    const noA = a.vehicle_no || '';
+                    const noB = b.vehicle_no || '';
+                    return noA.localeCompare(noB);
+                }
+                if (!timeA) return 1;  // 没有注册时间的排后面
+                if (!timeB) return -1;
+
+                // 倒序排序（新的在前）
+                return new Date(timeB) - new Date(timeA);
+            });
+
+            let html = `
+                <div class="vehicles-header">车辆列表 (${vehicles.length})</div>
+                <table class="vehicles-table">
+                    <thead>
+                        <tr>
+                            <th>车牌号</th>
+                            <th>颜色</th>
+                            <th>位置</th>
+                            <th>定位时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            sortedVehicles.forEach(vehicle => {
+                const colorInfo = getVehicleColor(vehicle.vehicle_color);
+                const location = vehicle.longitude && vehicle.latitude
+                    ? `${formatCoord(vehicle.latitude)}, ${formatCoord(vehicle.longitude)}`
+                    : 'N/A';
+
+                const vehicleNo = vehicle.vehicle_no || 'N/A';
+                html += `
+                    <tr>
+                        <td>
+                            <span class="copyable">
+                                <strong>${vehicleNo}</strong>
+                                ${vehicleNo !== 'N/A' ? createCopyButton(vehicleNo) : ''}
+                            </span>
+                        </td>
+                        <td><span class="vehicle-color ${colorInfo.class}">${colorInfo.name}</span></td>
+                        <td class="coord">${location}</td>
+                        <td class="time">${formatTime(vehicle.location_time)}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            return html;
+        }
+
+        // 渲染平台卡片
+        function renderPlatform(platform) {
+            const isOnline = platform.sub_connected;
+            const mainHeartbeat = formatTime(platform.last_main_heartbeat);
+            const subHeartbeat = formatTime(platform.last_sub_heartbeat);
+            const vehicleCount = platform.vehicles ? platform.vehicles.length : 0;
+
+            return `
+                <div class="platform-card" data-platform-id="${platform.user_id}">
+                    <div class="platform-header">
+                        <div class="platform-info">
+                            <div class="platform-title" onclick="togglePlatform(${platform.user_id})" style="cursor: pointer;">
+                                平台 #${platform.user_id}
+                                <span class="expand-icon">▼</span>
+                            </div>
+                            <div class="platform-id">
+                                ${platform.platform_id ? `平台编码: ${platform.platform_id}` : ''}
+                            </div>
+                            <div class="platform-id">
+                                会话ID: ${platform.main_session_id || 'N/A'}
+                            </div>
+                        </div>
+
+                        <div class="status-group">
+                            <div class="status-item">
+                                <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
+                                <span class="status-label">主链路:</span>
+                                <span class="status-value">${platform.main_session_id ? '已连接' : '未连接'}</span>
+                            </div>
+                            <div class="heartbeat-info">最后心跳: ${mainHeartbeat}</div>
+
+                            <div class="status-item">
+                                <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
+                                <span class="status-label">从链路:</span>
+                                <span class="status-value">${isOnline ? '已连接' : '未连接'}</span>
+                            </div>
+                            <div class="heartbeat-info">最后心跳: ${subHeartbeat}</div>
+                        </div>
+
+                        <div class="link-info">
+                            <div class="link-info-item">
+                                <span class="link-info-label">下行IP:</span> ${platform.down_link_ip || 'N/A'}
+                            </div>
+                            <div class="link-info-item">
+                                <span class="link-info-label">下行端口:</span> ${platform.down_link_port || 'N/A'}
+                            </div>
+                            <div class="link-info-item">
+                                <span class="link-info-label">GNSS中心ID:</span> ${platform.gnss_center_id || 'N/A'}
+                            </div>
+                            ${platform.auth_code ? `
+                            <div class="link-info-item">
+                                <span class="link-info-label">时效口令:</span>
+                                <span class="copyable">
+                                    ${platform.auth_code}
+                                    ${createCopyButton(platform.auth_code)}
+                                </span>
+                            </div>
+                            ` : ''}
+                        </div>
+
+                        <div class="status-group">
+                            <div class="status-item">
+                                <span class="badge badge-info">车辆: ${vehicleCount}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="vehicles-section">
+                        <div class="vehicles-container">
+                            ${renderVehicles(platform.vehicles)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 切换平台展开/折叠
+        function togglePlatform(platformId) {
+            const card = document.querySelector(`[data-platform-id="${platformId}"]`);
+            if (card) {
+                card.classList.toggle('expanded');
+            }
+        }
+
+        // 加载数据
+        async function loadData() {
+            try {
+                // 保存当前展开状态
+                const expandedPlatforms = new Set();
+                document.querySelectorAll('.platform-card.expanded').forEach(card => {
+                    expandedPlatforms.add(card.dataset.platformId);
+                });
+
+                const response = await fetch('/api/platforms');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch data');
+                }
+
+                const platforms = await response.json();
+
+                // 更新统计数据
+                let onlineCount = 0;
+                let totalVehicles = 0;
+                let monitoredCount = 0;
+
+                platforms.forEach(platform => {
+                    if (platform.sub_connected) onlineCount++;
+                    if (platform.vehicles) {
+                        totalVehicles += platform.vehicles.length;
+                        monitoredCount += platform.vehicles.filter(v => v.monitored).length;
+                    }
+                });
+
+                document.getElementById('onlinePlatforms').textContent = onlineCount;
+                document.getElementById('totalPlatforms').textContent = platforms.length;
+                document.getElementById('totalVehicles').textContent = totalVehicles;
+                document.getElementById('monitoredVehicles').textContent = monitoredCount;
+
+                // 渲染平台列表
+                const container = document.getElementById('platformsContainer');
+                if (platforms.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div>暂无平台数据</div></div>';
+                } else {
+                    container.innerHTML = platforms.map(platform => renderPlatform(platform)).join('');
+
+                    // 恢复展开状态
+                    expandedPlatforms.forEach(platformId => {
+                        const card = document.querySelector(`[data-platform-id="${platformId}"]`);
+                        if (card) {
+                            card.classList.add('expanded');
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('platformsContainer').innerHTML =
+                    '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div>加载数据失败，请稍后重试</div></div>';
+            }
+        }
+
+        // 设置自动刷新
+        function setupAutoRefresh() {
+            const toggle = document.getElementById('autoRefreshToggle');
+            const interval = document.getElementById('refreshInterval');
+
+            function updateAutoRefresh() {
+                if (autoRefreshTimer) {
+                    clearInterval(autoRefreshTimer);
+                    autoRefreshTimer = null;
+                }
+
+                if (toggle.checked) {
+                    const seconds = parseInt(interval.value);
+                    autoRefreshTimer = setInterval(loadData, seconds * 1000);
+                }
+            }
+
+            toggle.addEventListener('change', updateAutoRefresh);
+            interval.addEventListener('change', updateAutoRefresh);
+
+            updateAutoRefresh();
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            setupAutoRefresh();
+        });
+    </script>
+</body>
+</html>

@@ -2,11 +2,16 @@ package jtt809
 
 // VehicleColor 表示车辆颜色编码，参考 JT/T 809 车辆颜色类型。
 const (
-	VehicleColorBlue   byte = 0x01
-	VehicleColorYellow byte = 0x02
-	VehicleColorBlack  byte = 0x03
-	VehicleColorWhite  byte = 0x04
-	VehicleColorOther  byte = 0x09
+	VehicleColorBlue          byte = 0x01 // 蓝色
+	VehicleColorYellow        byte = 0x02 // 黄色
+	VehicleColorBlack         byte = 0x03 // 黑色
+	VehicleColorWhite         byte = 0x04 // 白色
+	VehicleColorGreen         byte = 0x05 // 绿色
+	VehicleColorOther         byte = 0x09 // 其他
+	VehicleColorAgriYellow    byte = 0x91 // 农黄色
+	VehicleColorYellowGreen   byte = 0x93 // 黄绿色
+	VehicleColorAgriGreen     byte = 0x92 // 农绿色
+	VehicleColorGradientGreen byte = 0x94 // 渐变绿
 )
 
 // SubBusinessType 定义子业务数据类型，截取常用值以支持定位、查岗等业务。

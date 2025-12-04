@@ -334,6 +334,8 @@ func (g *JT809Gateway) checkConnections() {
 			go g.connectSubLinkWithRetry(snap.DownLinkIP, snap.DownLinkPort, snap.UserID, snap.Password)
 		}
 	}
+	// 检查车辆定位状态
+	g.checkVehiclePositions()
 }
 
 func (g *JT809Gateway) keepAliveSubLink(c *client.SimpleClient, userID uint32) {
@@ -383,13 +385,23 @@ func (g *JT809Gateway) handleDynamicInfo(session *goserver.AppSession, frame *jt
 	}
 	switch {
 	case pkt.SubBusinessID == jtt809.SubMsgUploadVehicleReg:
-		reg, err := parseVehicleRegistration(pkt.Payload)
+		info, err := jtt809.ParseVehicleRegistration(pkt.Payload)
 		if err != nil {
 			slog.Warn("parse vehicle registration failed", "session", session.ID, "err", err)
 			return
 		}
+		reg := &VehicleRegistration{
+			PlatformID:        info.PlatformID,
+			ProducerID:        info.ProducerID,
+			TerminalModelType: info.TerminalModelType,
+			IMEI:              info.IMEI,
+			TerminalID:        info.TerminalID,
+			TerminalSIM:       info.TerminalSIM,
+		}
 		g.store.UpdateVehicleRegistration(user, pkt.Color, pkt.Plate, reg)
 		slog.Info("vehicle registration", "user_id", user, "plate", pkt.Plate, "platform", reg.PlatformID)
+		// 自动订阅该车辆的实时定位数据
+		go g.autoSubscribeVehicle(user, pkt.Color, pkt.Plate)
 	case pkt.SubBusinessID == jtt809.SubMsgRealLocation:
 		pos, err := jtt809.ParseVehiclePosition2019(pkt.Payload)
 		if err != nil {
@@ -397,8 +409,8 @@ func (g *JT809Gateway) handleDynamicInfo(session *goserver.AppSession, frame *jt
 			return
 		}
 		g.store.UpdateLocation(user, pkt.Color, pkt.Plate, &pos, 0)
-		if lon, lat, ok := extractLonLat(pos.GnssData); ok {
-			slog.Info("vehicle location", "user_id", user, "plate", pkt.Plate, "lon", lon, "lat", lat)
+		if gnss, err := jtt809.ParseGNSSData(pos.GnssData); err == nil {
+			slog.Info("vehicle location", "user_id", user, "plate", pkt.Plate, "lon", gnss.Longitude, "lat", gnss.Latitude)
 		} else {
 			slog.Info("vehicle location", "user_id", user, "plate", pkt.Plate, "gnss_len", len(pos.GnssData))
 		}
@@ -421,8 +433,8 @@ func (g *JT809Gateway) handleDynamicInfo(session *goserver.AppSession, frame *jt
 				break
 			}
 			g.store.UpdateLocation(user, pkt.Color, pkt.Plate, &pos, count)
-			if lon, lat, ok := extractLonLat(pos.GnssData); ok {
-				slog.Info("batch location item", "user_id", user, "plate", pkt.Plate, "index", i, "lon", lon, "lat", lat)
+			if gnss, err := jtt809.ParseGNSSData(pos.GnssData); err == nil {
+				slog.Info("batch location item", "user_id", user, "plate", pkt.Plate, "index", i, "lon", gnss.Longitude, "lat", gnss.Latitude)
 			}
 			reader = reader[totalLen:]
 			parsed++
@@ -446,23 +458,29 @@ func (g *JT809Gateway) handleDynamicInfo(session *goserver.AppSession, frame *jt
 		})
 		slog.Info("video stream ack", "user_id", user, "plate", pkt.Plate, "server", ack.ServerIP, "port", ack.ServerPort, "result", ack.Result)
 	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorStartupAck:
-		result, err := jtt809.ParseMonitorAck(pkt.Payload)
+		ack, err := jtt809.ParseMonitorAck(pkt.Payload)
 		if err != nil {
-			slog.Warn("parse monitor startup ack failed", "session", session.ID, "err", err)
+			slog.Warn("parse monitor startup ack failed", "session", session.ID, "err", err, "payload_hex", fmt.Sprintf("%X", pkt.Payload))
 			return
 		}
-		g.store.UpdateMonitorStatus(user, pkt.Color, pkt.Plate, result == jtt809.MonitorAckSuccess)
-		slog.Info("monitor startup ack", "user_id", user, "plate", pkt.Plate, "result", result)
+		slog.Info("monitor startup ack received",
+			"user_id", user,
+			"plate", pkt.Plate,
+			"source_type", fmt.Sprintf("0x%04X", ack.SourceDataType),
+			"source_sn", ack.SourceMsgSN,
+			"data_length", ack.DataLength)
 	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorEndAck:
-		result, err := jtt809.ParseMonitorAck(pkt.Payload)
+		ack, err := jtt809.ParseMonitorAck(pkt.Payload)
 		if err != nil {
-			slog.Warn("parse monitor end ack failed", "session", session.ID, "err", err)
+			slog.Warn("parse monitor end ack failed", "session", session.ID, "err", err, "payload_hex", fmt.Sprintf("%X", pkt.Payload))
 			return
 		}
-		if result == jtt809.MonitorAckSuccess {
-			g.store.UpdateMonitorStatus(user, pkt.Color, pkt.Plate, false)
-		}
-		slog.Info("monitor end ack", "user_id", user, "plate", pkt.Plate, "result", result)
+		// 收到应答表示下级平台已接收取消订阅请求
+		slog.Info("monitor end ack received",
+			"user_id", user,
+			"plate", pkt.Plate,
+			"source_type", fmt.Sprintf("0x%04X", ack.SourceDataType),
+			"source_sn", ack.SourceMsgSN)
 	default:
 		slog.Debug("unhandled dynamic sub business", "user_id", user, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
 	}
@@ -594,51 +612,6 @@ func splitJT809Frames(data []byte, atEOF bool) (advance int, token []byte, err e
 	return stop + 1, frame, nil
 }
 
-func extractLonLat(gnss []byte) (float64, float64, bool) {
-	if len(gnss) < 36 {
-		return 0, 0, false
-	}
-	lon := float64(binary.BigEndian.Uint32(gnss[8:12])) / 1e6
-	lat := float64(binary.BigEndian.Uint32(gnss[12:16])) / 1e6
-	return lon, lat, true
-}
-
-// parseVehicleRegistration 解码 0x1201 注册载荷（2019版固定长度）。
-func parseVehicleRegistration(payload []byte) (*VehicleRegistration, error) {
-	const (
-		lenPlatform = 11
-		lenProducer = 11
-		lenModel    = 30
-		lenIMEI     = 15
-		lenTermID   = 30
-		lenSIM      = 13
-	)
-	total := lenPlatform + lenProducer + lenModel + lenIMEI + lenTermID + lenSIM
-	if len(payload) < total {
-		return nil, fmt.Errorf("registration payload too short: %d (expected %d)", len(payload), total)
-	}
-	offset := 0
-	read := func(length int) []byte {
-		v := payload[offset : offset+length]
-		offset += length
-		return v
-	}
-	platform, _ := jtt809.DecodeGBK(read(lenPlatform))
-	producer, _ := jtt809.DecodeGBK(read(lenProducer))
-	model, _ := jtt809.DecodeGBK(read(lenModel))
-	imei, _ := jtt809.DecodeGBK(read(lenIMEI))
-	terminalID, _ := jtt809.DecodeGBK(read(lenTermID))
-	sim, _ := jtt809.DecodeGBK(read(lenSIM))
-	return &VehicleRegistration{
-		PlatformID:        platform,
-		ProducerID:        producer,
-		TerminalModelType: model,
-		IMEI:              imei,
-		TerminalID:        terminalID,
-		TerminalSIM:       sim,
-	}, nil
-}
-
 func (g *JT809Gateway) handleAuthorize(session *goserver.AppSession, frame *jtt809.Frame) {
 	user, ok := g.sessionUser(session)
 	if !ok {
@@ -699,5 +672,104 @@ func (g *JT809Gateway) handleAuthorize(session *goserver.AppSession, frame *jtt8
 
 	default:
 		slog.Debug("unhandled authorize sub msg", "sub_id", fmt.Sprintf("0x%04X", msg.SubBusinessID))
+	}
+}
+
+// autoSubscribeVehicle 在车辆注册后自动订阅该车辆的实时定位数据
+func (g *JT809Gateway) autoSubscribeVehicle(userID uint32, color byte, vehicle string) {
+	// 等待一小段时间，确保从链路已建立
+	time.Sleep(2 * time.Second)
+
+	req := MonitorRequest{
+		UserID:       userID,
+		VehicleNo:    vehicle,
+		VehicleColor: color,
+		ReasonCode:   byte(jtt809.MonitorReasonManual),
+	}
+
+	if err := g.RequestMonitorStartup(req); err != nil {
+		slog.Warn("auto subscribe vehicle failed", "user_id", userID, "plate", vehicle, "err", err)
+		return
+	}
+
+	slog.Info("auto subscribed vehicle", "user_id", userID, "plate", vehicle)
+}
+
+// checkVehiclePositions 检查所有车辆的定位状态，处理超时和离线车辆
+func (g *JT809Gateway) checkVehiclePositions() {
+	snapshots := g.store.Snapshots()
+	now := time.Now()
+
+	for _, snap := range snapshots {
+		if snap.MainSessionID == "" || !snap.SubConnected {
+			continue
+		}
+
+		for _, vehicle := range snap.Vehicles {
+			vehicleKey := vehicleKey(vehicle.VehicleNo, vehicle.VehicleColor)
+
+			// 处理已注册但还未订阅或订阅失败的车辆
+			if vehicle.PositionTime.IsZero() {
+				// 如果有注册信息，说明车辆已注册，尝试订阅
+				if vehicle.Registration != nil {
+					req := MonitorRequest{
+						UserID:       snap.UserID,
+						VehicleNo:    vehicle.VehicleNo,
+						VehicleColor: vehicle.VehicleColor,
+						ReasonCode:   byte(jtt809.MonitorReasonManual),
+					}
+
+					if err := g.RequestMonitorStartup(req); err != nil {
+						slog.Warn("subscribe registered vehicle failed",
+							"user_id", snap.UserID,
+							"plate", vehicle.VehicleNo,
+							"err", err)
+						continue
+					}
+
+					slog.Info("subscribed registered vehicle",
+						"user_id", snap.UserID,
+						"plate", vehicle.VehicleNo)
+				}
+				continue
+			}
+
+			timeSinceLastPosition := now.Sub(vehicle.PositionTime)
+
+			// 超过10分钟未上报定位，认定为离线，删除车辆
+			if timeSinceLastPosition > 10*time.Minute {
+				g.store.RemoveVehicle(snap.UserID, vehicleKey)
+				slog.Warn("vehicle offline, removed",
+					"user_id", snap.UserID,
+					"plate", vehicle.VehicleNo,
+					"last_position", vehicle.PositionTime.Format("2006-01-02 15:04:05"),
+					"offline_duration", timeSinceLastPosition.String())
+				continue
+			}
+
+			// 超过5分钟未上报定位，重新发送订阅请求
+			if timeSinceLastPosition > 5*time.Minute {
+				req := MonitorRequest{
+					UserID:       snap.UserID,
+					VehicleNo:    vehicle.VehicleNo,
+					VehicleColor: vehicle.VehicleColor,
+					ReasonCode:   byte(jtt809.MonitorReasonManual),
+				}
+
+				if err := g.RequestMonitorStartup(req); err != nil {
+					slog.Warn("resubscribe vehicle failed",
+						"user_id", snap.UserID,
+						"plate", vehicle.VehicleNo,
+						"err", err)
+					continue
+				}
+
+				slog.Info("resubscribed vehicle due to position timeout",
+					"user_id", snap.UserID,
+					"plate", vehicle.VehicleNo,
+					"last_position", vehicle.PositionTime.Format("2006-01-02 15:04:05"),
+					"timeout_duration", timeSinceLastPosition.String())
+			}
+		}
 	}
 }
