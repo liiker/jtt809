@@ -1,8 +1,7 @@
-package main
+package server
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"net"
 	"strconv"
@@ -26,40 +25,6 @@ type Account struct {
 	VerifyCode uint32
 }
 
-// parseConfig 解析命令行参数，返回标准化配置。
-func parseConfig() (Config, error) {
-	var (
-		mainAddr  = flag.String("main", ":10709", "主链路监听地址，格式 host:port")
-		httpAddr  = flag.String("http", ":18080", "管理与调度 HTTP 地址")
-		idleSec   = flag.Int("idle", 300, "连接空闲超时时间，单位秒，<=0 表示不超时")
-		accountFS multiAccountFlag
-	)
-	flag.Var(&accountFS, "account", "下级平台账号，格式 userID:password:verifyCode，可重复指定")
-	flag.Parse()
-
-	cfg := Config{
-		MainListen: *mainAddr,
-		HTTPListen: *httpAddr,
-		IdleTimeout: func() time.Duration {
-			if *idleSec <= 0 {
-				return 0
-			}
-			return time.Duration(*idleSec) * time.Second
-		}(),
-	}
-
-	if len(accountFS) == 0 {
-		// 默认账号，方便快速体验。
-		accountFS = append(accountFS, Account{
-			UserID:     10001,
-			Password:   "pass809",
-			VerifyCode: 0x13572468,
-		})
-	}
-	cfg.Accounts = accountFS
-	return cfg, nil
-}
-
 // normalizeHostPort 将 host:port 字符串拆分为 host 与 port，便于 go-server 初始化。
 func normalizeHostPort(addr string) (string, int, error) {
 	if addr == "" {
@@ -76,10 +41,10 @@ func normalizeHostPort(addr string) (string, int, error) {
 	return host, port, nil
 }
 
-// multiAccountFlag 支持重复声明账号参数。
-type multiAccountFlag []Account
+// MultiAccountFlag 支持重复声明账号参数。
+type MultiAccountFlag []Account
 
-func (m *multiAccountFlag) String() string {
+func (m *MultiAccountFlag) String() string {
 	parts := make([]string, 0, len(*m))
 	for _, acc := range *m {
 		parts = append(parts, fmt.Sprintf("%d:%s:%d", acc.UserID, acc.Password, acc.VerifyCode))
@@ -87,7 +52,7 @@ func (m *multiAccountFlag) String() string {
 	return strings.Join(parts, ",")
 }
 
-func (m *multiAccountFlag) Set(value string) error {
+func (m *MultiAccountFlag) Set(value string) error {
 	parts := strings.Split(value, ":")
 	if len(parts) < 3 || len(parts) > 4 {
 		return errors.New("account must be formatted as userID:password:verifyCode")
