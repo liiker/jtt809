@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// VehiclePosition 表示 2019 版车辆定位扩展，携带 GNSS 原始数据与多平台报警信息。
+// VehiclePosition 表示车辆定位扩展，携带 GNSS 原始数据与多平台报警信息。
 type VehiclePosition struct {
 	Encrypt     byte
 	GnssData    []byte
@@ -37,11 +37,11 @@ func (v VehiclePosition) encode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// VehicleLocationUpload 表示主链路车辆动态信息交换（0x1200）业务体，仅承载 2019 版定位数据。
+// VehicleLocationUpload 表示主链路车辆动态信息交换（0x1200）业务体。
 type VehicleLocationUpload struct {
 	VehicleNo    string
 	VehicleColor byte
-	Position2019 *VehiclePosition
+	Position     *VehiclePosition
 }
 
 func (VehicleLocationUpload) MsgID() uint16 { return MsgIDDynamicInfo }
@@ -50,10 +50,10 @@ func (v VehicleLocationUpload) Encode() ([]byte, error) {
 	if len(v.VehicleNo) == 0 {
 		return nil, errors.New("vehicle number is required")
 	}
-	if v.Position2019 == nil {
-		return nil, errors.New("vehicle position 2019 is required")
+	if v.Position == nil {
+		return nil, errors.New("vehicle position is required")
 	}
-	positionBody, err := v.Position2019.encode()
+	positionBody, err := v.Position.encode()
 	if err != nil {
 		return nil, err
 	}
@@ -70,17 +70,17 @@ func (v VehicleLocationUpload) Encode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// ParseVehiclePosition2019 解析 2019 版定位载荷，保留原始 GNSS 数据，不做二次解码。
-func ParseVehiclePosition2019(body []byte) (VehiclePosition, error) {
+// ParseVehiclePosition 解析定位载荷，保留原始 GNSS 数据，不做二次解码。
+func ParseVehiclePosition(body []byte) (VehiclePosition, error) {
 	if len(body) < 1+4+11+4+11+4+11+4 {
-		return VehiclePosition{}, errors.New("position 2019 body too short")
+		return VehiclePosition{}, errors.New("position body too short")
 	}
 	pos := VehiclePosition{
 		Encrypt: body[0],
 	}
 	dataLen := int(binary.BigEndian.Uint32(body[1:5]))
 	if len(body) < 5+dataLen+11+4+11+4+11+4 {
-		return VehiclePosition{}, errors.New("position 2019 body length mismatch")
+		return VehiclePosition{}, errors.New("position body length mismatch")
 	}
 	pos.GnssData = append([]byte(nil), body[5:5+dataLen]...)
 	offset := 5 + dataLen

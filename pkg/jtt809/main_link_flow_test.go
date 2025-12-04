@@ -64,8 +64,8 @@ func TestMainLinkSendLoginResponse(t *testing.T) {
 	}
 }
 
-// 处理车辆实时定位信息：编码 2019 版实时定位并解析子业务及定位载荷。
-func TestMainLinkHandleRealTimeLocation2019(t *testing.T) {
+// 处理车辆实时定位信息：编码实时定位并解析子业务及定位载荷。
+func TestMainLinkHandleRealTimeLocation(t *testing.T) {
 	gnss := []byte{0x01, 0x02, 0x03}
 	pos := &VehiclePosition{
 		Encrypt:     1,
@@ -80,7 +80,7 @@ func TestMainLinkHandleRealTimeLocation2019(t *testing.T) {
 	body := VehicleLocationUpload{
 		VehicleNo:    "粤A12345",
 		VehicleColor: VehicleColorBlue,
-		Position2019: pos,
+		Position:     pos,
 	}
 	pkt, err := EncodePackage(Package{Header: Header{GNSSCenterID: 99, WithUTC: true}, Body: body})
 	if err != nil {
@@ -94,12 +94,12 @@ func TestMainLinkHandleRealTimeLocation2019(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse sub business: %v", err)
 	}
-	if sub.SubBusinessID != SubMsgRealLocation { // 2019 版仍复用 0x1202 标识
+	if sub.SubBusinessID != SubMsgRealLocation { // 复用 0x1202 标识
 		t.Fatalf("unexpected sub business id: %x", sub.SubBusinessID)
 	}
-	loc, err := ParseVehiclePosition2019(sub.Payload)
+	loc, err := ParseVehiclePosition(sub.Payload)
 	if err != nil {
-		t.Fatalf("parse vehicle position 2019: %v", err)
+		t.Fatalf("parse vehicle position: %v", err)
 	}
 	if len(loc.GnssData) != len(gnss) || loc.PlatformID3 != pos.PlatformID3 || loc.Alarm2 != pos.Alarm2 {
 		t.Fatalf("position payload mismatch: %+v", loc)

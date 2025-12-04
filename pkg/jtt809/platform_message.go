@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-// PlatformQueryAck 对应子业务 0x1301 平台查岗应答（2019 字段简化版），描述查岗对象与应答内容。
+// PlatformQueryAck 对应子业务 0x1301 平台查岗应答，描述查岗对象与应答内容。
 type PlatformQueryAck struct {
 	ObjectType     byte
 	Responder      string
@@ -17,7 +17,7 @@ type PlatformQueryAck struct {
 	InfoContent    string
 }
 
-// ParsePlatformQueryAck 解析平台查岗应答载荷（2019 版字段），返回结构化结果。
+// ParsePlatformQueryAck 解析平台查岗应答载荷，返回结构化结果。
 func ParsePlatformQueryAck(pkt *SubBusinessPacket) (*PlatformQueryAck, error) {
 	if pkt == nil {
 		return nil, errors.New("nil packet")

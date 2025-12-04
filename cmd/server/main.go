@@ -37,7 +37,7 @@ func main() {
 
 func printStartupInfo(cfg Config) {
 	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("  JT/T 809 上级平台服务器")
+	fmt.Println("  JT/T 809-2019 上级平台服务器")
 	fmt.Println(strings.Repeat("=", 80))
 
 	// 服务信息

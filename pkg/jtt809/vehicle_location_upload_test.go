@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestVehicleLocationUploadEncode2019(t *testing.T) {
+func TestVehicleLocationUploadEncode(t *testing.T) {
 	gnss := []byte{0x01, 0x02, 0x03, 0x04}
 	pos := &VehiclePosition{
 		Encrypt:     1,
@@ -20,38 +20,38 @@ func TestVehicleLocationUploadEncode2019(t *testing.T) {
 	body := VehicleLocationUpload{
 		VehicleNo:    "粤B00001",
 		VehicleColor: 2,
-		Position2019: pos,
+		Position:     pos,
 	}
 	data, err := EncodePackage(Package{
 		Header: Header{GNSSCenterID: 88, WithUTC: true},
 		Body:   body,
 	})
 	if err != nil {
-		t.Fatalf("encode 2019 vehicle upload: %v", err)
+		t.Fatalf("encode vehicle upload: %v", err)
 	}
 	frame, err := DecodeFrame(data)
 	if err != nil {
 		t.Fatalf("decode frame: %v", err)
 	}
 	if !frame.Header.WithUTC {
-		t.Fatalf("expected UTC header for 2019")
+		t.Fatalf("expected UTC header")
 	}
 	raw := frame.RawBody
 	length := binary.BigEndian.Uint32(raw[24:28])
 	const expectedLen = 54
 	if length != expectedLen {
-		t.Fatalf("unexpected 2019 length: %d", length)
+		t.Fatalf("unexpected length: %d", length)
 	}
-	parsed, err := ParseVehiclePosition2019(raw[28:])
+	parsed, err := ParseVehiclePosition(raw[28:])
 	if err != nil {
-		t.Fatalf("parse position 2019: %v", err)
+		t.Fatalf("parse position: %v", err)
 	}
 	if parsed.Alarm3 != pos.Alarm3 || len(parsed.GnssData) != len(gnss) {
-		t.Fatalf("position 2019 mismatch: %+v", parsed)
+		t.Fatalf("position mismatch: %+v", parsed)
 	}
 }
 
-func TestVehicleLocationUploadRequirePosition2019(t *testing.T) {
+func TestVehicleLocationUploadRequirePosition(t *testing.T) {
 	body := VehicleLocationUpload{
 		VehicleNo:    "粤B00001",
 		VehicleColor: VehicleColorBlue,

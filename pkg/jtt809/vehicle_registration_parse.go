@@ -2,7 +2,7 @@ package jtt809
 
 import "fmt"
 
-// VehicleRegistrationInfo 表示 0x1201 车辆注册子业务（2019版）中的注册详情。
+// VehicleRegistrationInfo 表示 0x1201 车辆注册子业务中的注册详情。
 type VehicleRegistrationInfo struct {
 	PlatformID        string
 	ProducerID        string
@@ -12,7 +12,7 @@ type VehicleRegistrationInfo struct {
 	TerminalSIM       string
 }
 
-// ParseVehicleRegistration 解码 0x1201 注册载荷（2019版固定长度）。
+// ParseVehicleRegistration 解码 0x1201 注册载荷（固定长度）。
 func ParseVehicleRegistration(payload []byte) (*VehicleRegistrationInfo, error) {
 	const (
 		lenPlatform = 11

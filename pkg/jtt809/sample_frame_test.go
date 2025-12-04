@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestDecodeSample2019Frame(t *testing.T) {
+func TestDecodeSampleFrame(t *testing.T) {
 	hexFrame := `5B 00 00 00 C9 00 00 06 82 17 00 01 34 15 F4 01 00 00 00 00 00 27 0F 00 00 00 00 5E 02 A5 07 B8 D4 C1 41 31 32 33 34 35 00 00 00 00 00 00 00 00 00 00 00 00 00 02 17 01 00 00 00 8B 01 02 03 04 05 06 07 08 09 10 11 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 E7 D3 5D`
 	data, err := hexStringToBytes(hexFrame)
 	if err != nil {
@@ -17,7 +17,7 @@ func TestDecodeSample2019Frame(t *testing.T) {
 	}
 	frame, err := DecodeFrame(data)
 	if err != nil {
-		t.Fatalf("decode 2019 frame: %v", err)
+		t.Fatalf("decode frame: %v", err)
 	}
 	if frame.Header.MsgLength != 201 {
 		t.Fatalf("unexpected msg length: %d", frame.Header.MsgLength)
@@ -39,7 +39,7 @@ func TestDecodeSample2019Frame(t *testing.T) {
 	if len(frame.RawBody) != 167 {
 		t.Fatalf("unexpected raw body length: %d", len(frame.RawBody))
 	}
-	dyn, err := ParseMainDynamic2019(frame.RawBody)
+	dyn, err := ParseMainDynamic(frame.RawBody)
 	if err != nil {
 		t.Fatalf("parse dynamic: %v", err)
 	}

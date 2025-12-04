@@ -51,7 +51,7 @@ func main() {
 	http.HandleFunc("/proxy.flv", handleProxyFLV)
 
 	fmt.Println("===================================================")
-	fmt.Println("🚀 JT/T 1078 最终完美版 (Logs + Fixes)")
+	fmt.Println("🚀 JT/T 1078-2016 最终完美版 (Logs + Fixes)")
 	fmt.Println("✨ 功能: 视频秒开 | 多路复用 | 延迟自动修复 | 全链路日志")
 	fmt.Printf("👂 监听端口: %s\n", port)
 	fmt.Println("===================================================")

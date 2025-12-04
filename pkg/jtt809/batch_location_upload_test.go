@@ -2,7 +2,7 @@ package jtt809
 
 import "testing"
 
-func TestBatchLocationUploadEncode2019(t *testing.T) {
+func TestBatchLocationUploadEncode(t *testing.T) {
 	pos := &VehiclePosition{
 		Encrypt:     1,
 		GnssData:    nil,
@@ -47,10 +47,10 @@ func TestBatchLocationUploadEncode2019(t *testing.T) {
 		t.Fatalf("unexpected gnss count: %d", payload[0])
 	}
 
-	recordLen := 50 // 2019 定位无 GNSS 数据时的长度
+	recordLen := 50 // 无 GNSS 数据时的长度
 	for i := 0; i < 2; i++ {
 		start := 1 + i*recordLen
-		p, err := ParseVehiclePosition2019(payload[start : start+recordLen])
+		p, err := ParseVehiclePosition(payload[start : start+recordLen])
 		if err != nil {
 			t.Fatalf("parse position %d: %v", i, err)
 		}

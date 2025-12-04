@@ -403,9 +403,9 @@ func (g *JT809Gateway) handleDynamicInfo(session *goserver.AppSession, frame *jt
 		// 自动订阅该车辆的实时定位数据
 		go g.autoSubscribeVehicle(user, pkt.Color, pkt.Plate)
 	case pkt.SubBusinessID == jtt809.SubMsgRealLocation:
-		pos, err := jtt809.ParseVehiclePosition2019(pkt.Payload)
+		pos, err := jtt809.ParseVehiclePosition(pkt.Payload)
 		if err != nil {
-			slog.Warn("parse vehicle position 2019 failed", "session", session.ID, "err", err)
+			slog.Warn("parse vehicle position failed", "session", session.ID, "err", err)
 			return
 		}
 		g.store.UpdateLocation(user, pkt.Color, pkt.Plate, &pos, 0)
@@ -427,9 +427,9 @@ func (g *JT809Gateway) handleDynamicInfo(session *goserver.AppSession, frame *jt
 			if gnssLen < 0 || len(reader) < totalLen {
 				break
 			}
-			pos, err := jtt809.ParseVehiclePosition2019(reader[:totalLen])
+			pos, err := jtt809.ParseVehiclePosition(reader[:totalLen])
 			if err != nil {
-				slog.Warn("parse batch vehicle position 2019 failed", "session", session.ID, "index", i, "err", err)
+				slog.Warn("parse batch vehicle position failed", "session", session.ID, "index", i, "err", err)
 				break
 			}
 			g.store.UpdateLocation(user, pkt.Color, pkt.Plate, &pos, count)
@@ -439,9 +439,9 @@ func (g *JT809Gateway) handleDynamicInfo(session *goserver.AppSession, frame *jt
 			reader = reader[totalLen:]
 			parsed++
 		}
-		slog.Info("batch vehicle location (2019)", "user_id", user, "plate", pkt.Plate, "count", parsed)
+		slog.Info("batch vehicle location", "user_id", user, "plate", pkt.Plate, "count", parsed)
 	// 注意：0x1701 (时效口令上报) 应该通过 0x1700 (视频鉴权) 主业务类型传输，
-	// 而不是通过 0x1200 (动态信息)。根据 JT/T 809 标准，视频相关消息应使用专门的 0x1700。
+	// 而不是通过 0x1200 (动态信息)。根据 JT/T 809-2019 标准，视频相关消息应使用专门的 0x1700。
 	// 如果收到 0x1200 中的 0x1701，记录警告但不处理。
 	case pkt.SubBusinessID == jtt809.SubMsgAuthorizeStartupReq:
 		slog.Warn("received 0x1701 in 0x1200, should use 0x1700 instead", "user_id", user, "plate", pkt.Plate)

@@ -11,10 +11,10 @@ import (
 // 协议分层说明：
 //
 // JT/T 1078-2016 是视频通信协议，定义了视频相关的数据格式（如时效口令、视频请求等）。
-// JT/T 809 是平台间通信协议，定义了平台间传输的封装格式。
+// JT/T 809-2019 是平台间通信协议，定义了平台间传输的封装格式。
 //
 // 0x1700 (视频鉴权) 消息体结构：
-//   子业务类型标识(2字节) + JT/T 1078 数据
+//   子业务类型标识(2字节) + JT/T 1078-2016 数据
 //
 // 注意：0x1700 与 0x1200 使用不同的封装格式：
 //   - 0x1200: 车牌号(21) + 颜色(1) + 子业务ID(2) + 长度(4) + 载荷 (SubBusinessPacket)
@@ -32,7 +32,7 @@ import (
 // 视频相关鉴权消息
 type AuthorizeMsg struct {
 	SubBusinessID uint16 // 2 bytes - 子业务类型标识
-	Payload       []byte // 变长 - JT/T 1078 数据
+	Payload       []byte // 变长 - JT/T 1078-2016 数据
 }
 
 func (m AuthorizeMsg) MsgID() uint16 { return jtt809.MsgIDAuthorize }
@@ -60,7 +60,7 @@ func ParseAuthorizeMsg(body []byte) (AuthorizeMsg, error) {
 // 结构与 AuthorizeMsg 相同：子业务ID(2字节) + 载荷
 type DownAuthorizeMsg struct {
 	SubBusinessID uint16 // 2 bytes - 子业务类型标识
-	Payload       []byte // 变长 - JT/T 1078 数据
+	Payload       []byte // 变长 - JT/T 1078-2016 数据
 }
 
 func (m DownAuthorizeMsg) MsgID() uint16 { return jtt809.MsgIDDownAuthorize }

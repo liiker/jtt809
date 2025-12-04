@@ -40,7 +40,7 @@ func TestParseVehicleRegistration(t *testing.T) {
 		return buf
 	}
 
-	t.Run("Parse 2019 payload", func(t *testing.T) {
+	t.Run("Parse payload", func(t *testing.T) {
 		payload := createPayload("Plat2", "Prod2", "Model2", "IMEI2", "TID2", "SIM2")
 		reg, err := jtt809.ParseVehicleRegistration(payload)
 		if err != nil {

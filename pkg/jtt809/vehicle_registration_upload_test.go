@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestVehicleRegistrationUploadEncode2019(t *testing.T) {
+func TestVehicleRegistrationUploadEncode(t *testing.T) {
 	body := VehicleRegistrationUpload{
 		VehicleNo:         "粤A12345",
 		VehicleColor:      VehicleColorBlue,

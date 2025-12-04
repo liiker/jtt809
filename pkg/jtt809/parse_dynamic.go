@@ -6,8 +6,8 @@ import (
 	"fmt"
 )
 
-// DynamicInfo2019 表示 2019 版主链路车辆动态交互业务内容（0x1200），保留原始子业务载荷。
-type DynamicInfo2019 struct {
+// DynamicInfo 表示主链路车辆动态交互业务内容（0x1200），保留原始子业务载荷。
+type DynamicInfo struct {
 	Plate         string
 	PlateRaw      []byte
 	Color         byte
@@ -16,13 +16,13 @@ type DynamicInfo2019 struct {
 	Payload       []byte
 }
 
-// ParseMainDynamic2019 解析主链路车辆动态类报文（如 0x1200），返回子业务结构。
-func ParseMainDynamic2019(body []byte) (*DynamicInfo2019, error) {
+// ParseMainDynamic 解析主链路车辆动态类报文（如 0x1200），返回子业务结构。
+func ParseMainDynamic(body []byte) (*DynamicInfo, error) {
 	pkt, err := ParseSubBusiness(body)
 	if err != nil {
 		return nil, err
 	}
-	return &DynamicInfo2019{
+	return &DynamicInfo{
 		Plate:         pkt.Plate,
 		PlateRaw:      pkt.PlateRaw,
 		Color:         pkt.Color,

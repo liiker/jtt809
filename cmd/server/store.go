@@ -44,7 +44,7 @@ type VehicleState struct {
 
 	Registration *VehicleRegistration
 
-	Position2019 *jtt809.VehiclePosition
+	Position     *jtt809.VehiclePosition
 	PositionTime time.Time
 	BatchCount   int
 
@@ -88,15 +88,15 @@ type PlatformSnapshot struct {
 
 // VehicleSnapshot 为单车数据提供可序列化视图。
 type VehicleSnapshot struct {
-	VehicleNo              string                  `json:"vehicle_no"`
-	VehicleColor           byte                    `json:"vehicle_color"`
-	Registration           *VehicleRegistration    `json:"registration,omitempty"`
-	Position               *jtt809.VehiclePosition `json:"location,omitempty"`
-	PositionTime           time.Time               `json:"location_time,omitempty"`
-	Longitude    float64        `json:"longitude,omitempty"`
-	Latitude     float64        `json:"latitude,omitempty"`
-	BatchCount   int            `json:"batch_count,omitempty"`
-	LastVideoAck *VideoAckState `json:"video_ack,omitempty"`
+	VehicleNo    string                  `json:"vehicle_no"`
+	VehicleColor byte                    `json:"vehicle_color"`
+	Registration *VehicleRegistration    `json:"registration,omitempty"`
+	Position     *jtt809.VehiclePosition `json:"location,omitempty"`
+	PositionTime time.Time               `json:"location_time,omitempty"`
+	Longitude    float64                 `json:"longitude,omitempty"`
+	Latitude     float64                 `json:"latitude,omitempty"`
+	BatchCount   int                     `json:"batch_count,omitempty"`
+	LastVideoAck *VideoAckState          `json:"video_ack,omitempty"`
 }
 
 // NewPlatformStore 初始化状态存储。
@@ -191,15 +191,15 @@ func (s *PlatformStore) UpdateVehicleRegistration(userID uint32, color byte, veh
 	v.Registration = reg
 }
 
-// UpdateLocation 写入最新定位数据（2019 版）。
-func (s *PlatformStore) UpdateLocation(userID uint32, color byte, vehicle string, pos2019 *jtt809.VehiclePosition, batchCount int) {
+// UpdateLocation 写入最新定位数据。
+func (s *PlatformStore) UpdateLocation(userID uint32, color byte, vehicle string, pos *jtt809.VehiclePosition, batchCount int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state := s.ensurePlatformLocked(userID)
 	v := state.ensureVehicleLocked(vehicleKey(vehicle, color), vehicle, color)
-	if pos2019 != nil {
-		cp := *pos2019
-		v.Position2019 = &cp
+	if pos != nil {
+		cp := *pos
+		v.Position = &cp
 		v.PositionTime = time.Now()
 	}
 	if batchCount > 0 {
@@ -360,8 +360,8 @@ func (state *PlatformState) snapshotLocked() PlatformSnapshot {
 			cp := *v.Registration
 			vs.Registration = &cp
 		}
-		if v.Position2019 != nil {
-			cp := *v.Position2019
+		if v.Position != nil {
+			cp := *v.Position
 			vs.Position = &cp
 			if gnss, err := jtt809.ParseGNSSData(cp.GnssData); err == nil {
 				vs.Longitude = gnss.Longitude

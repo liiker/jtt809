@@ -1,6 +1,6 @@
 package jtt809
 
-// VehicleColor 表示车辆颜色编码，参考 JT/T 809 车辆颜色类型。
+// VehicleColor 表示车辆颜色编码，参考 JT/T 809-2019 车辆颜色类型。
 const (
 	VehicleColorBlue          byte = 0x01 // 蓝色
 	VehicleColorYellow        byte = 0x02 // 黄色
@@ -16,8 +16,8 @@ const (
 
 // SubBusinessType 定义子业务数据类型，截取常用值以支持定位、查岗等业务。
 const (
-	SubMsgRealLocation uint16 = 0x1202 // 实时上传车辆定位信息
-	SubMsgBatchLocation uint16 = 0x1203 // 车辆定位信息自动补报
+	SubMsgRealLocation     uint16 = 0x1202 // 实时上传车辆定位信息
+	SubMsgBatchLocation    uint16 = 0x1203 // 车辆定位信息自动补报
 	SubMsgUploadVehicleReg uint16 = 0x1201 // 上传车辆注册信息
 	SubMsgWarnSuperviseReq uint16 = 0x9401 // 报警督办请求
 	SubMsgPlatformQueryAck uint16 = 0x1301 // 平台查岗应答
@@ -30,7 +30,7 @@ const (
 	SubMsgApplyForMonitorStartupAck uint16 = 0x1205 // 启动车辆定位信息交换应答
 	SubMsgApplyForMonitorEndAck     uint16 = 0x1206 // 结束车辆定位信息交换应答
 
-	// JT/T 1078 子业务
+	// JT/T 1078-2016 子业务
 	SubMsgAuthorizeStartupReq         uint16 = 0x1701 // 时效口令上报消息 (UP_AUTHORIZE_MSG_STARTUP)
 	SubMsgAuthorizeStartupReqMsg      uint16 = 0x1702 // 时效口令请求 (UP_AUTHORIZE_MSG_STARTUP_REQ)
 	SubMsgAuthorizeStartupReqAck      uint16 = 0x9702 // 时效口令请求应答 (DOWN_AUTHORIZE_MSG_STARTUP_REQ_ACK)

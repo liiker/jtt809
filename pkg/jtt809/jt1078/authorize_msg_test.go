@@ -8,7 +8,7 @@ import (
 
 func TestAuthorizeMsg(t *testing.T) {
 	// Test 0x1701 (AuthorizeStartupReq) wrapped in 0x1700
-	// 0x1700 消息体结构：子业务ID(2字节) + JT/T 1078 数据
+	// 0x1700 消息体结构：子业务ID(2字节) + JT/T 1078-2016 数据
 	req := AuthorizeStartupReq{
 		PlatformID:     "12345678901",
 		AuthorizeCode1: "AUTH_CODE_1_TEST_64_BYTES_PADDING_PADDING_PADDING_PADDING_PADDING",
@@ -30,7 +30,7 @@ func TestAuthorizeMsg(t *testing.T) {
 		t.Fatalf("encode auth msg failed: %v", err)
 	}
 
-	// 验证编码长度：2(子业务ID) + 139(JT/T 1078数据) = 141字节
+	// 验证编码长度：2(子业务ID) + 139(JT/T 1078-2016数据) = 141字节
 	expectedLen := 2 + 11 + 64 + 64
 	if len(encoded) != expectedLen {
 		t.Errorf("expected length %d, got %d", expectedLen, len(encoded))
@@ -57,7 +57,7 @@ func TestAuthorizeMsg(t *testing.T) {
 
 func TestDownAuthorizeMsg(t *testing.T) {
 	// Test 0x9702 (AuthorizeStartupReqAck) wrapped in 0x9700
-	// 0x9700 消息体结构：子业务ID(2字节) + JT/T 1078 数据
+	// 0x9700 消息体结构：子业务ID(2字节) + JT/T 1078-2016 数据
 	ack := AuthorizeStartupReqAckMsg{}
 	ackPayload, _ := ack.Encode()
 

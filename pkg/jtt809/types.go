@@ -30,7 +30,7 @@ const (
 	// 从链路下行业务
 	MsgIDDownExgMsg uint16 = 0x9200 // 从链路车辆动态信息交换业务
 
-	// JT/T 1078 视频业务
+	// JT/T 1078-2016 视频业务
 	MsgIDAuthorize         uint16 = 0x1700 // 视频相关鉴权
 	MsgIDRealTimeVideo     uint16 = 0x1800 // 实时音视频
 	MsgIDDownAuthorize     uint16 = 0x9700 // 下行视频鉴权
@@ -48,7 +48,7 @@ func (v Version) bytes() [3]byte {
 	return [3]byte{v.Major, v.Minor, v.Patch}
 }
 
-// Header 对应 JT/T 809 消息头字段，包含消息长度、流水号、业务 ID、平台标识、版本、加密及时间戳。
+// Header 对应 JT/T 809-2019 消息头字段，包含消息长度、流水号、业务 ID、平台标识、版本、加密及时间戳。
 type Header struct {
 	MsgLength    uint32
 	MsgSN        uint32
@@ -83,7 +83,7 @@ type Package struct {
 }
 
 var (
-	defaultVersion = Version{Major: 1, Minor: 2, Patch: 19} // 默认按2019版
+	defaultVersion = Version{Major: 1, Minor: 2, Patch: 19} // 默认协议版本号
 	seq            uint32
 )
 
@@ -103,7 +103,7 @@ func EncodePackage(pkg Package) ([]byte, error) {
 	if header.Version == (Version{}) {
 		header.Version = defaultVersion
 	}
-	// 2019 版默认携带 UTC
+	// 默认携带 UTC
 	if header.WithUTC || header.Version.Patch >= 19 {
 		header.WithUTC = true
 	}
@@ -190,15 +190,15 @@ func DecodeFrame(data []byte) (*Frame, error) {
 	}
 	headerLen := 22
 	// 判断是否包含UTC字段：优先看版本号，其次看实际数据长度
-	// 兼容某些客户端Version字段填错但实际按2019版发送的情况
+	// 兼容某些客户端Version字段填错但实际仍携带UTC字段的情况
 	hasUTC := header.Version.Patch >= 19
 	if !hasUTC && len(unescaped) >= 31+22 {
-		// 如果数据长度足够容纳UTC字段(至少31+22字节)，尝试按2019版解析
+		// 如果数据长度足够容纳UTC字段(至少31+22字节)，尝试按带UTC格式解析
 		hasUTC = true
 	}
 	if hasUTC {
 		if len(unescaped) < 31 {
-			return nil, errors.New("header too short for 2019 version")
+			return nil, errors.New("header too short for extended timestamp")
 		}
 		headerLen = 30
 		header.WithUTC = true

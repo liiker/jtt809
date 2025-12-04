@@ -15,11 +15,11 @@
 
 ### 协议基础
 - 帧标识：0x5B/0x5D
-- 消息头：30字节（2019版）
+- 消息头：30字节
 - CRC校验：CRC-16/CCITT-FALSE
 - 转义规则：0x5A/0x5E
 - 字符编码：GBK
-- 时间戳：UTC 8字节（2019版）
+- 时间戳：UTC 8字节
 
 ### 已实现业务
 
@@ -76,7 +76,7 @@ pkg := jtt809.Package{
     Body: jtt809.VehicleLocationUpload{
         VehicleNo:    "粤B12345",
         VehicleColor: jtt809.VehicleColorBlue,
-        Position2019: &jtt809.VehiclePosition2019{
+        Position: &jtt809.VehiclePosition{
             Encrypt: 0,
             GnssData: buildGnssPayload(), // 直接写入 GNSS 原始数据
             PlatformID1: "11000000001",
@@ -113,7 +113,7 @@ case jtt809.MsgIDDynamicInfo:
     pkt, _ := jtt809.ParseSubBusiness(frame.RawBody)
     switch pkt.SubBusinessID {
     case jtt809.SubMsgRealLocation:
-        pos, _ := jtt809.ParseVehiclePosition2019(pkt.Payload)
+        pos, _ := jtt809.ParseVehiclePosition(pkt.Payload)
     case jtt809.SubMsgApplyForMonitorStartupAck:
         result, _ := jtt809.ParseMonitorAck(pkt.Payload)
     }
@@ -122,7 +122,7 @@ case jtt809.MsgIDDynamicInfo:
 
 ## 版本支持
 
-- ✅ JT/T809-2019
+- ✅ JT/T 809-2019
 
 ## 测试
 
@@ -132,5 +132,5 @@ go test ./...
 
 ## 参考标准
 
-- JT/T809-2019 道路运输车辆卫星定位系统平台间数据交换
-- JT/T1078-2016 道路运输车辆卫星定位系统视频通信协议
+- JT/T 809-2019 道路运输车辆卫星定位系统平台间数据交换
+- JT/T 1078-2016 道路运输车辆卫星定位系统视频通信协议

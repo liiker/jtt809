@@ -6,12 +6,12 @@ import (
 	"errors"
 )
 
-// BatchLocationRecord 表示补报的一条定位记录（仅支持 2019 版定位数据）。
+// BatchLocationRecord 表示补报的一条定位记录。
 type BatchLocationRecord struct {
 	Position *VehiclePosition
 }
 
-// BatchLocationUpload 表示主链路车辆定位信息自动补报（0x1200 子业务 0x1203，2019 版）。
+// BatchLocationUpload 表示主链路车辆定位信息自动补报（0x1200 子业务 0x1203）。
 // 按规范单包 GNSSCount 建议 1-5 条。
 type BatchLocationUpload struct {
 	VehicleNo    string
@@ -21,7 +21,7 @@ type BatchLocationUpload struct {
 
 func (BatchLocationUpload) MsgID() uint16 { return MsgIDDynamicInfo }
 
-// Encode 构造 0x1203 子业务载荷（仅包含 2019 定位体），并封装到 0x1200 主链路报文。
+// Encode 构造 0x1203 子业务载荷，并封装到 0x1200 主链路报文。
 func (v BatchLocationUpload) Encode() ([]byte, error) {
 	if len(v.VehicleNo) == 0 {
 		return nil, errors.New("vehicle number is required")
@@ -62,7 +62,7 @@ func (v BatchLocationUpload) Encode() ([]byte, error) {
 
 func encodeBatchLocationBody(loc BatchLocationRecord) ([]byte, error) {
 	if loc.Position == nil {
-		return nil, errors.New("vehicle position 2019 is required")
+		return nil, errors.New("vehicle position is required")
 	}
 	return loc.Position.encode()
 }

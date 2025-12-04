@@ -64,7 +64,7 @@ func main() {
 		Password:        *password,
 		DownLinkIP:      *myIP,
 		DownLinkPort:    uint16(*subPort),
-		ProtocolVersion: [3]byte{1, 2, 19}, // 2019版本
+		ProtocolVersion: [3]byte{1, 2, 19},
 	})
 	if err != nil {
 		log.Fatalf("Build login failed: %v", err)
@@ -360,7 +360,7 @@ var sinTable = [360]int16{
 func sendAuthorizeReport(conn net.Conn, msgSN *uint32) {
 	time.Sleep(1 * time.Second)
 
-	// 构建 JT/T 1078 时效口令数据
+	// 构建 JT/T 1078-2016 时效口令数据
 	req := jt1078.AuthorizeStartupReq{
 		PlatformID:     "Platform01",
 		AuthorizeCode1: "AuthCode123",
@@ -409,7 +409,7 @@ func sendVehicleRegistration(conn net.Conn, msgSN *uint32) {
 		PlatformID:        "Platform01",
 		ProducerID:        "Manufacturer",
 		TerminalModelType: "GPS-Model-X1",
-		IMEI:              "860123456789012", // 2019版本：15字节
+		IMEI:              "860123456789012", // 15 字节
 		TerminalID:        "TERM" + fmt.Sprintf("%d", *userID),
 		TerminalSIM:       "13800138000",
 	}
@@ -686,7 +686,7 @@ func sendGPSLocation(gps *GPSSimulator) {
 	upload := jtt809.VehicleLocationUpload{
 		VehicleNo:    *vehicleNo,
 		VehicleColor: byte(*vehicleColor),
-		Position2019: position,
+		Position:     position,
 	}
 	pkg, _ := jtt809.EncodePackage(jtt809.Package{
 		Header: jtt809.Header{
@@ -716,7 +716,7 @@ func sendLocationUpdates(conn net.Conn, msgSN *uint32, interval time.Duration) {
 		upload := jtt809.VehicleLocationUpload{
 			VehicleNo:    *vehicleNo,
 			VehicleColor: byte(*vehicleColor),
-			Position2019: position,
+			Position:     position,
 		}
 
 		pkg, err := jtt809.EncodePackage(jtt809.Package{
