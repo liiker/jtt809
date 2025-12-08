@@ -134,17 +134,21 @@ func (g *JT809Gateway) handleMainMessage(session *goserver.AppSession, payload [
 	case jtt809.MsgIDLogoutRequest:
 		return g.simpleResponse(session, "main", frame, jtt809.LogoutResponse{})
 	case jtt809.MsgIDDynamicInfo:
-		g.handleDynamicInfo(session, frame)
+		user, _ := g.sessionUser(session)
+		g.handleDynamicInfo(user, frame)
 	case jtt809.MsgIDPlatformInfo:
-		g.handlePlatformInfo(session, frame)
+		user, _ := g.sessionUser(session)
+		g.handlePlatformInfo(user, frame)
 	case jtt809.MsgIDAlarmInteract:
 		g.handleAlarmInteract(session, frame)
 	case jtt809.MsgIDDisconnNotify:
 		g.handleDisconnectInform(session, frame)
 	case jtt809.MsgIDRealTimeVideo:
-		g.handleRealTimeVideo(session, frame)
+		user, _ := g.sessionUser(session)
+		g.handleRealTimeVideo(user, frame)
 	case jtt809.MsgIDAuthorize:
-		g.handleAuthorize(session, frame)
+		user, _ := g.sessionUser(session)
+		g.handleAuthorize(user, frame)
 	default:
 		slog.Warn("unhandled main message", "session", session.ID, "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
 	}
@@ -177,22 +181,22 @@ func (g *JT809Gateway) handleSubMessage(userID uint32, payload []byte) {
 	case jtt809.MsgIDDynamicInfo:
 		// 主链路断开时，下级平台可能通过从链路上报车辆数据
 		slog.Info("sub link received dynamic info (main link may be down)", "user_id", userID)
-		g.handleDynamicInfoFromSub(userID, frame)
+		g.handleDynamicInfo(userID, frame)
 
 	case jtt809.MsgIDPlatformInfo:
 		// 平台信息查询
 		slog.Info("sub link received platform info (main link may be down)", "user_id", userID)
-		g.handlePlatformInfoFromSub(userID, frame)
+		g.handlePlatformInfo(userID, frame)
 
 	case jtt809.MsgIDRealTimeVideo:
 		// 实时视频应答
 		slog.Info("sub link received real time video response", "user_id", userID)
-		g.handleRealTimeVideoFromSub(userID, frame)
+		g.handleRealTimeVideo(userID, frame)
 
 	case jtt809.MsgIDAuthorize:
 		// 鉴权消息
 		slog.Info("sub link received authorize msg (main link may be down)", "user_id", userID)
-		g.handleAuthorizeFromSub(userID, frame)
+		g.handleAuthorize(userID, frame)
 
 	case jtt809.MsgIDDownDisconnectInform: // Disconnect Notify
 		g.handleSubDisconnect(userID, frame)
@@ -555,163 +559,17 @@ func (g *JT809Gateway) handleHeartbeat(session *goserver.AppSession, frame *jtt8
 	}
 }
 
-func (g *JT809Gateway) handleDynamicInfo(session *goserver.AppSession, frame *jtt809.Frame) {
-	user, ok := g.sessionUser(session)
-	if !ok {
-		slog.Warn("dynamic info before login", "session", session.ID)
-		return
-	}
+func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
 	pkt, err := jtt809.ParseSubBusiness(frame.RawBody)
 	if err != nil {
-		slog.Warn("parse sub business failed", "session", session.ID, "err", err)
+		slog.Warn("parse sub business failed", "user_id", userID, "err", err)
 		return
 	}
 	switch {
 	case pkt.SubBusinessID == jtt809.SubMsgUploadVehicleReg:
 		info, err := jtt809.ParseVehicleRegistration(pkt.Payload)
 		if err != nil {
-			slog.Warn("parse vehicle registration failed", "session", session.ID, "err", err)
-			return
-		}
-		reg := &VehicleRegistration{
-			PlatformID:        info.PlatformID,
-			ProducerID:        info.ProducerID,
-			TerminalModelType: info.TerminalModelType,
-			IMEI:              info.IMEI,
-			TerminalID:        info.TerminalID,
-			TerminalSIM:       info.TerminalSIM,
-		}
-		g.store.UpdateVehicleRegistration(user, pkt.Color, pkt.Plate, reg)
-		slog.Info("vehicle registration", "user_id", user, "plate", pkt.Plate, "platform", reg.PlatformID)
-
-		// 触发车辆注册回调
-		if g.callbacks != nil && g.callbacks.OnVehicleRegistration != nil {
-			go g.callbacks.OnVehicleRegistration(user, pkt.Plate, pkt.Color, reg)
-		}
-
-		// 自动订阅该车辆的实时定位数据
-		go g.autoSubscribeVehicle(user, pkt.Color, pkt.Plate)
-	case pkt.SubBusinessID == jtt809.SubMsgRealLocation:
-		pos, err := jtt809.ParseVehiclePosition(pkt.Payload)
-		if err != nil {
-			slog.Warn("parse vehicle position failed", "session", session.ID, "err", err)
-			return
-		}
-		g.store.UpdateLocation(user, pkt.Color, pkt.Plate, &pos, 0)
-
-		// 触发车辆定位回调
-		var gnssData *jtt809.GNSSData
-		if gnss, err := jtt809.ParseGNSSData(pos.GnssData); err == nil {
-			gnssData = &gnss
-		}
-		if g.callbacks != nil && g.callbacks.OnVehicleLocation != nil {
-			go g.callbacks.OnVehicleLocation(user, pkt.Plate, pkt.Color, &pos, gnssData)
-		}
-		if gnssData != nil {
-			slog.Info("vehicle location", "user_id", user, "plate", pkt.Plate, "lon", gnssData.Longitude, "lat", gnssData.Latitude)
-		} else {
-			slog.Info("vehicle location", "user_id", user, "plate", pkt.Plate, "gnss_len", len(pos.GnssData))
-		}
-	case pkt.SubBusinessID == jtt809.SubMsgBatchLocation:
-		if len(pkt.Payload) == 0 {
-			return
-		}
-		count := int(pkt.Payload[0])
-		reader := pkt.Payload[1:]
-		parsed := 0
-		for i := 0; i < count && len(reader) >= 5; i++ {
-			gnssLen := int(binary.BigEndian.Uint32(reader[1:5]))
-			totalLen := 1 + 4 + gnssLen + (11+4)*3
-			if gnssLen < 0 || len(reader) < totalLen {
-				break
-			}
-			pos, err := jtt809.ParseVehiclePosition(reader[:totalLen])
-			if err != nil {
-				slog.Warn("parse batch vehicle position failed", "session", session.ID, "index", i, "err", err)
-				break
-			}
-			g.store.UpdateLocation(user, pkt.Color, pkt.Plate, &pos, count)
-			if gnss, err := jtt809.ParseGNSSData(pos.GnssData); err == nil {
-				slog.Info("batch location item", "user_id", user, "plate", pkt.Plate, "index", i, "lon", gnss.Longitude, "lat", gnss.Latitude)
-			}
-			reader = reader[totalLen:]
-			parsed++
-		}
-		slog.Info("batch vehicle location", "user_id", user, "plate", pkt.Plate, "count", parsed)
-
-		// 触发批量定位回调
-		if g.callbacks != nil && g.callbacks.OnBatchLocation != nil {
-			go g.callbacks.OnBatchLocation(user, pkt.Plate, pkt.Color, parsed)
-		}
-	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorStartupAck:
-		ack, err := jtt809.ParseMonitorAck(pkt.Payload)
-		if err != nil {
-			slog.Warn("parse monitor startup ack failed", "session", session.ID, "err", err, "payload_hex", fmt.Sprintf("%X", pkt.Payload))
-			return
-		}
-		slog.Info("monitor startup ack received",
-			"user_id", user,
-			"plate", pkt.Plate,
-			"source_type", fmt.Sprintf("0x%04X", ack.SourceDataType),
-			"source_sn", ack.SourceMsgSN,
-			"data_length", ack.DataLength)
-
-		// 触发启动车辆定位应答回调
-		if g.callbacks != nil && g.callbacks.OnMonitorStartupAck != nil {
-			go g.callbacks.OnMonitorStartupAck(user, pkt.Plate, pkt.Color)
-		}
-	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorEndAck:
-		ack, err := jtt809.ParseMonitorAck(pkt.Payload)
-		if err != nil {
-			slog.Warn("parse monitor end ack failed", "session", session.ID, "err", err, "payload_hex", fmt.Sprintf("%X", pkt.Payload))
-			return
-		}
-		// 收到应答表示下级平台已接收取消订阅请求
-		slog.Info("monitor end ack received",
-			"user_id", user,
-			"plate", pkt.Plate,
-			"source_type", fmt.Sprintf("0x%04X", ack.SourceDataType),
-			"source_sn", ack.SourceMsgSN)
-
-		// 触发结束车辆定位应答回调
-		if g.callbacks != nil && g.callbacks.OnMonitorEndAck != nil {
-			go g.callbacks.OnMonitorEndAck(user, pkt.Plate, pkt.Color)
-		}
-	default:
-		slog.Debug("unhandled dynamic sub business", "user_id", user, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
-	}
-}
-
-func (g *JT809Gateway) handlePlatformInfo(session *goserver.AppSession, frame *jtt809.Frame) {
-	pkt, err := jtt809.ParseSubBusiness(frame.RawBody)
-	if err != nil {
-		slog.Warn("parse platform info failed", "session", session.ID, "err", err)
-		return
-	}
-	if pkt.SubBusinessID == jtt809.SubMsgPlatformQueryAck {
-		ack, err := jtt809.ParsePlatformQueryAck(pkt)
-		if err != nil {
-			slog.Warn("parse platform query ack failed", "err", err)
-			return
-		}
-		slog.Info("platform query ack", "object", ack.ObjectID, "info", ack.InfoContent)
-		return
-	}
-	slog.Debug("unhandled platform info sub", "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
-}
-
-// handleDynamicInfoFromSub 处理从链路收到的动态信息（主链路断开时的降级场景）
-func (g *JT809Gateway) handleDynamicInfoFromSub(userID uint32, frame *jtt809.Frame) {
-	pkt, err := jtt809.ParseSubBusiness(frame.RawBody)
-	if err != nil {
-		slog.Warn("parse sub business failed from sub link", "user_id", userID, "err", err)
-		return
-	}
-	switch {
-	case pkt.SubBusinessID == jtt809.SubMsgUploadVehicleReg:
-		info, err := jtt809.ParseVehicleRegistration(pkt.Payload)
-		if err != nil {
-			slog.Warn("parse vehicle registration failed from sub", "user_id", userID, "err", err)
+			slog.Warn("parse vehicle registration failed", "user_id", userID, "err", err)
 			return
 		}
 		reg := &VehicleRegistration{
@@ -723,30 +581,36 @@ func (g *JT809Gateway) handleDynamicInfoFromSub(userID uint32, frame *jtt809.Fra
 			TerminalSIM:       info.TerminalSIM,
 		}
 		g.store.UpdateVehicleRegistration(userID, pkt.Color, pkt.Plate, reg)
-		slog.Info("vehicle registration from sub", "user_id", userID, "plate", pkt.Plate, "platform", reg.PlatformID)
+		slog.Info("vehicle registration", "user_id", userID, "plate", pkt.Plate, "platform", reg.PlatformID)
+
+		// 触发车辆注册回调
 		if g.callbacks != nil && g.callbacks.OnVehicleRegistration != nil {
 			go g.callbacks.OnVehicleRegistration(userID, pkt.Plate, pkt.Color, reg)
 		}
-		go g.autoSubscribeVehicle(userID, pkt.Color, pkt.Plate)
 
+		// 自动订阅该车辆的实时定位数据
+		go g.autoSubscribeVehicle(userID, pkt.Color, pkt.Plate)
 	case pkt.SubBusinessID == jtt809.SubMsgRealLocation:
 		pos, err := jtt809.ParseVehiclePosition(pkt.Payload)
 		if err != nil {
-			slog.Warn("parse vehicle position failed from sub", "user_id", userID, "err", err)
+			slog.Warn("parse vehicle position failed", "user_id", userID, "err", err)
 			return
 		}
 		g.store.UpdateLocation(userID, pkt.Color, pkt.Plate, &pos, 0)
+
+		// 触发车辆定位回调
 		var gnssData *jtt809.GNSSData
 		if gnss, err := jtt809.ParseGNSSData(pos.GnssData); err == nil {
 			gnssData = &gnss
-			slog.Info("vehicle location from sub", "user_id", userID, "plate", pkt.Plate, "lon", gnss.Longitude, "lat", gnss.Latitude)
-		} else {
-			slog.Info("vehicle location from sub", "user_id", userID, "plate", pkt.Plate, "gnss_len", len(pos.GnssData))
 		}
 		if g.callbacks != nil && g.callbacks.OnVehicleLocation != nil {
 			go g.callbacks.OnVehicleLocation(userID, pkt.Plate, pkt.Color, &pos, gnssData)
 		}
-
+		if gnssData != nil {
+			slog.Info("vehicle location", "user_id", userID, "plate", pkt.Plate, "lon", gnssData.Longitude, "lat", gnssData.Latitude)
+		} else {
+			slog.Info("vehicle location", "user_id", userID, "plate", pkt.Plate, "gnss_len", len(pos.GnssData))
+		}
 	case pkt.SubBusinessID == jtt809.SubMsgBatchLocation:
 		if len(pkt.Payload) == 0 {
 			return
@@ -762,90 +626,82 @@ func (g *JT809Gateway) handleDynamicInfoFromSub(userID uint32, frame *jtt809.Fra
 			}
 			pos, err := jtt809.ParseVehiclePosition(reader[:totalLen])
 			if err != nil {
-				slog.Warn("parse batch vehicle position failed from sub", "user_id", userID, "index", i, "err", err)
+				slog.Warn("parse batch vehicle position failed", "user_id", userID, "index", i, "err", err)
 				break
 			}
 			g.store.UpdateLocation(userID, pkt.Color, pkt.Plate, &pos, count)
 			if gnss, err := jtt809.ParseGNSSData(pos.GnssData); err == nil {
-				slog.Info("batch location item from sub", "user_id", userID, "plate", pkt.Plate, "index", i, "lon", gnss.Longitude, "lat", gnss.Latitude)
+				slog.Info("batch location item", "user_id", userID, "plate", pkt.Plate, "index", i, "lon", gnss.Longitude, "lat", gnss.Latitude)
 			}
 			reader = reader[totalLen:]
 			parsed++
 		}
-		slog.Info("batch vehicle location from sub", "user_id", userID, "plate", pkt.Plate, "count", parsed)
+		slog.Info("batch vehicle location", "user_id", userID, "plate", pkt.Plate, "count", parsed)
+
+		// 触发批量定位回调
 		if g.callbacks != nil && g.callbacks.OnBatchLocation != nil {
 			go g.callbacks.OnBatchLocation(userID, pkt.Plate, pkt.Color, parsed)
 		}
+	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorStartupAck:
+		ack, err := jtt809.ParseMonitorAck(pkt.Payload)
+		if err != nil {
+			slog.Warn("parse monitor startup ack failed", "user_id", userID, "err", err, "payload_hex", fmt.Sprintf("%X", pkt.Payload))
+			return
+		}
+		slog.Info("monitor startup ack received",
+			"user_id", userID,
+			"plate", pkt.Plate,
+			"source_type", fmt.Sprintf("0x%04X", ack.SourceDataType),
+			"source_sn", ack.SourceMsgSN,
+			"data_length", ack.DataLength)
 
+		// 触发启动车辆定位应答回调
+		if g.callbacks != nil && g.callbacks.OnMonitorStartupAck != nil {
+			go g.callbacks.OnMonitorStartupAck(userID, pkt.Plate, pkt.Color)
+		}
+	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorEndAck:
+		ack, err := jtt809.ParseMonitorAck(pkt.Payload)
+		if err != nil {
+			slog.Warn("parse monitor end ack failed", "user_id", userID, "err", err, "payload_hex", fmt.Sprintf("%X", pkt.Payload))
+			return
+		}
+		// 收到应答表示下级平台已接收取消订阅请求
+		slog.Info("monitor end ack received",
+			"user_id", userID,
+			"plate", pkt.Plate,
+			"source_type", fmt.Sprintf("0x%04X", ack.SourceDataType),
+			"source_sn", ack.SourceMsgSN)
+
+		// 触发结束车辆定位应答回调
+		if g.callbacks != nil && g.callbacks.OnMonitorEndAck != nil {
+			go g.callbacks.OnMonitorEndAck(userID, pkt.Plate, pkt.Color)
+		}
 	default:
-		slog.Debug("unhandled dynamic sub business from sub", "user_id", userID, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
+		slog.Debug("unhandled dynamic sub business", "user_id", userID, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
 	}
 }
 
-// handlePlatformInfoFromSub 处理从链路收到的平台信息
-func (g *JT809Gateway) handlePlatformInfoFromSub(userID uint32, frame *jtt809.Frame) {
+func (g *JT809Gateway) handlePlatformInfo(userID uint32, frame *jtt809.Frame) {
 	pkt, err := jtt809.ParseSubBusiness(frame.RawBody)
 	if err != nil {
-		slog.Warn("parse platform info failed from sub", "user_id", userID, "err", err)
+		slog.Warn("parse platform info failed", "user_id", userID, "err", err)
 		return
 	}
 	if pkt.SubBusinessID == jtt809.SubMsgPlatformQueryAck {
 		ack, err := jtt809.ParsePlatformQueryAck(pkt)
 		if err != nil {
-			slog.Warn("parse platform query ack failed from sub", "user_id", userID, "err", err)
+			slog.Warn("parse platform query ack failed", "user_id", userID, "err", err)
 			return
 		}
-		slog.Info("platform query ack from sub", "user_id", userID, "object", ack.ObjectID, "info", ack.InfoContent)
+		slog.Info("platform query ack", "user_id", userID, "object", ack.ObjectID, "info", ack.InfoContent)
 		return
 	}
-	slog.Debug("unhandled platform info sub from sub", "user_id", userID, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
+	slog.Debug("unhandled platform info sub", "user_id", userID, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
 }
 
-// handleRealTimeVideoFromSub 处理从链路收到的实时视频应答
-func (g *JT809Gateway) handleRealTimeVideoFromSub(userID uint32, frame *jtt809.Frame) {
-	pkt, err := jtt809.ParseSubBusiness(frame.RawBody)
-	if err != nil {
-		slog.Warn("parse sub business failed from sub", "user_id", userID, "err", err)
-		return
-	}
-	if pkt.SubBusinessID == jtt809.SubMsgRealTimeVideoStartupAck {
-		ack, err := jt1078.ParseRealTimeVideoStartupAck(pkt.Payload)
-		if err != nil {
-			slog.Warn("parse video ack failed from sub", "user_id", userID, "err", err)
-			return
-		}
-		g.store.RecordVideoAck(userID, pkt.Color, pkt.Plate, &VideoAckState{
-			Result:     ack.Result,
-			ServerIP:   ack.ServerIP,
-			ServerPort: ack.ServerPort,
-		})
-		slog.Info("video stream ack from sub", "user_id", userID, "plate", pkt.Plate, "server", ack.ServerIP, "port", ack.ServerPort, "result", ack.Result)
-	}
-}
 
-// handleAuthorizeFromSub 处理从链路收到的鉴权消息
-func (g *JT809Gateway) handleAuthorizeFromSub(userID uint32, frame *jtt809.Frame) {
-	msg, err := jt1078.ParseAuthorizeMsg(frame.RawBody)
-	if err != nil {
-		slog.Warn("parse authorize msg failed from sub", "user_id", userID, "err", err)
-		return
-	}
-	if msg.SubBusinessID == jtt809.SubMsgAuthorizeStartupReq {
-		req, err := jt1078.ParseAuthorizeStartupReq(msg.Payload)
-		if err != nil {
-			slog.Warn("parse authorize startup req failed from sub", "user_id", userID, "err", err)
-			return
-		}
-		authCode := req.AuthorizeCode1
-		g.store.UpdateAuthCode(userID, req.PlatformID, authCode)
-		slog.Info("video authorize report", "user_id", userID, "platform", req.PlatformID, "auth_code", authCode)
 
-		// 触发鉴权回调
-		if g.callbacks != nil && g.callbacks.OnAuthorize != nil {
-			go g.callbacks.OnAuthorize(userID, req.PlatformID, authCode)
-		}
-	}
-}
+
 
 func (g *JT809Gateway) handleAlarmInteract(session *goserver.AppSession, frame *jtt809.Frame) {
 	// 忽略主链路 0x1400 上报的报警数据，不用解析
@@ -861,33 +717,28 @@ func (g *JT809Gateway) handleDisconnectInform(session *goserver.AppSession, fram
 	slog.Warn("platform disconnect notify", "session", session.ID, "code", disc.ErrorCode)
 }
 
-func (g *JT809Gateway) handleRealTimeVideo(session *goserver.AppSession, frame *jtt809.Frame) {
-	user, ok := g.sessionUser(session)
-	if !ok {
-		slog.Warn("real time video before login", "session", session.ID)
-		return
-	}
+func (g *JT809Gateway) handleRealTimeVideo(userID uint32, frame *jtt809.Frame) {
 	pkt, err := jtt809.ParseSubBusiness(frame.RawBody)
 	if err != nil {
-		slog.Warn("parse sub business failed", "session", session.ID, "err", err)
+		slog.Warn("parse sub business failed", "user_id", userID, "err", err)
 		return
 	}
 	if pkt.SubBusinessID == jtt809.SubMsgRealTimeVideoStartupAck {
 		ack, err := jt1078.ParseRealTimeVideoStartupAck(pkt.Payload)
 		if err != nil {
-			slog.Warn("parse video ack failed", "session", session.ID, "err", err)
+			slog.Warn("parse video ack failed", "user_id", userID, "err", err)
 			return
 		}
-		g.store.RecordVideoAck(user, pkt.Color, pkt.Plate, &VideoAckState{
+		g.store.RecordVideoAck(userID, pkt.Color, pkt.Plate, &VideoAckState{
 			Result:     ack.Result,
 			ServerIP:   ack.ServerIP,
 			ServerPort: ack.ServerPort,
 		})
-		slog.Info("video stream ack", "user_id", user, "plate", pkt.Plate, "server", ack.ServerIP, "port", ack.ServerPort, "result", ack.Result)
+		slog.Info("video stream ack", "user_id", userID, "plate", pkt.Plate, "server", ack.ServerIP, "port", ack.ServerPort, "result", ack.Result)
 
 		// 触发视频应答回调
 		if g.callbacks != nil && g.callbacks.OnVideoResponse != nil {
-			go g.callbacks.OnVideoResponse(user, pkt.Plate, pkt.Color, &VideoAckState{
+			go g.callbacks.OnVideoResponse(userID, pkt.Plate, pkt.Color, &VideoAckState{
 				Result:     ack.Result,
 				ServerIP:   ack.ServerIP,
 				ServerPort: ack.ServerPort,
@@ -1083,38 +934,33 @@ func splitJT809Frames(data []byte, atEOF bool) (advance int, token []byte, err e
 	return stop + 1, frame, nil
 }
 
-func (g *JT809Gateway) handleAuthorize(session *goserver.AppSession, frame *jtt809.Frame) {
-	user, ok := g.sessionUser(session)
-	if !ok {
-		slog.Warn("authorize msg before login", "session", session.ID)
-		return
-	}
+func (g *JT809Gateway) handleAuthorize(userID uint32, frame *jtt809.Frame) {
 	// 0x1700 消息体结构：子业务ID(2字节) + 载荷
 	// 注意：不包含车牌号和颜色，与 0x1200 的 SubBusinessPacket 格式不同
 	msg, err := jt1078.ParseAuthorizeMsg(frame.RawBody)
 	if err != nil {
-		slog.Warn("parse authorize msg failed", "session", session.ID, "err", err)
+		slog.Warn("parse authorize msg failed", "user_id", userID, "err", err)
 		return
 	}
 	switch msg.SubBusinessID {
 	case jtt809.SubMsgAuthorizeStartupReq: // 0x1701
 		req, err := jt1078.ParseAuthorizeStartupReq(msg.Payload)
 		if err != nil {
-			slog.Warn("parse authorize startup req failed", "session", session.ID, "err", err)
+			slog.Warn("parse authorize startup req failed", "user_id", userID, "err", err)
 			return
 		}
 		authCode := req.AuthorizeCode1
 		// 注意：0x1700 消息中没有车牌号和颜色信息，时效口令是平台级别的
-		g.store.UpdateAuthCode(user, req.PlatformID, authCode)
-		slog.Info("video authorize report", "user_id", user, "platform", req.PlatformID, "auth_code", authCode)
+		g.store.UpdateAuthCode(userID, req.PlatformID, authCode)
+		slog.Info("video authorize report", "user_id", userID, "platform", req.PlatformID, "auth_code", authCode)
 
 		// 触发鉴权回调
 		if g.callbacks != nil && g.callbacks.OnAuthorize != nil {
-			go g.callbacks.OnAuthorize(user, req.PlatformID, authCode)
+			go g.callbacks.OnAuthorize(userID, req.PlatformID, authCode)
 		}
 
 	default:
-		slog.Debug("unhandled authorize sub msg", "sub_id", fmt.Sprintf("0x%04X", msg.SubBusinessID))
+		slog.Debug("unhandled authorize sub msg", "user_id", userID, "sub_id", fmt.Sprintf("0x%04X", msg.SubBusinessID))
 	}
 }
 
