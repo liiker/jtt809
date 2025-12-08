@@ -126,31 +126,15 @@ func (g *JT809Gateway) handleMainMessage(session *goserver.AppSession, payload [
 		return g.handleMainLogin(session, frame)
 	case jtt809.MsgIDHeartbeatRequest:
 		return g.handleHeartbeat(session, frame, true)
-	case jtt809.MsgIDDownHeartbeatResponse:
-		user, ok := g.sessionUser(session)
-		if ok {
-			g.store.RecordHeartbeat(user, false)
-		}
 	case jtt809.MsgIDLogoutRequest:
 		return g.simpleResponse(session, "main", frame, jtt809.LogoutResponse{})
-	case jtt809.MsgIDDynamicInfo:
-		user, _ := g.sessionUser(session)
-		g.handleDynamicInfo(user, frame)
-	case jtt809.MsgIDPlatformInfo:
-		user, _ := g.sessionUser(session)
-		g.handlePlatformInfo(user, frame)
-	case jtt809.MsgIDAlarmInteract:
-		g.handleAlarmInteract(session, frame)
-	case jtt809.MsgIDDisconnNotify:
+	case jtt809.MsgIDDownDisconnectInform:
 		g.handleDisconnectInform(session, frame)
-	case jtt809.MsgIDRealTimeVideo:
-		user, _ := g.sessionUser(session)
-		g.handleRealTimeVideo(user, frame)
-	case jtt809.MsgIDAuthorize:
-		user, _ := g.sessionUser(session)
-		g.handleAuthorize(user, frame)
 	default:
-		slog.Warn("unhandled main message", "session", session.ID, "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
+		user, ok := g.sessionUser(session)
+		if ok {
+			g.handleBusinessMessage(user, frame, true)
+		}
 	}
 	return nil, nil
 }
@@ -167,42 +151,37 @@ func (g *JT809Gateway) handleSubMessage(userID uint32, payload []byte) {
 
 	switch frame.BodyID {
 	case jtt809.MsgIDDownlinkConnReq:
-		// Active mode: we send this, we don't receive it
 		slog.Debug("received sub link login request on sub link", "user_id", userID)
-
-	case jtt809.MsgIDDownlinkConnResp: // Login Response
-		// Handled in connectSubLink
+	case jtt809.MsgIDDownlinkConnResp:
 		slog.Debug("received sub link login response", "user_id", userID)
-
-	case jtt809.MsgIDDownHeartbeatResponse: // Heartbeat Response
-		// 从链路心跳应答，记录心跳时间
-		g.store.RecordHeartbeat(userID, false)
-
-	case jtt809.MsgIDDynamicInfo:
-		// 主链路断开时，下级平台可能通过从链路上报车辆数据
-		slog.Info("sub link received dynamic info (main link may be down)", "user_id", userID)
-		g.handleDynamicInfo(userID, frame)
-
-	case jtt809.MsgIDPlatformInfo:
-		// 平台信息查询
-		slog.Info("sub link received platform info (main link may be down)", "user_id", userID)
-		g.handlePlatformInfo(userID, frame)
-
-	case jtt809.MsgIDRealTimeVideo:
-		// 实时视频应答
-		slog.Info("sub link received real time video response", "user_id", userID)
-		g.handleRealTimeVideo(userID, frame)
-
-	case jtt809.MsgIDAuthorize:
-		// 鉴权消息
-		slog.Info("sub link received authorize msg (main link may be down)", "user_id", userID)
-		g.handleAuthorize(userID, frame)
-
-	case jtt809.MsgIDDownDisconnectInform: // Disconnect Notify
+	case jtt809.MsgIDDisconnNotify:
 		g.handleSubDisconnect(userID, frame)
-
 	default:
-		slog.Debug("unhandled sub message", "user_id", userID, "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
+		g.handleBusinessMessage(userID, frame, false)
+	}
+}
+
+// handleBusinessMessage 处理可能在主链路或从链路接收的业务消息
+func (g *JT809Gateway) handleBusinessMessage(userID uint32, frame *jtt809.Frame, receivedOnMain bool) {
+	switch frame.BodyID {
+	case jtt809.MsgIDDynamicInfo:
+		g.handleDynamicInfo(userID, frame)
+	case jtt809.MsgIDPlatformInfo:
+		g.handlePlatformInfo(userID, frame)
+	case jtt809.MsgIDRealTimeVideo:
+		g.handleRealTimeVideo(userID, frame)
+	case jtt809.MsgIDAuthorize:
+		g.handleAuthorize(userID, frame)
+	case jtt809.MsgIDAlarmInteract:
+		g.handleAlarmInteract(nil, frame)
+	case jtt809.MsgIDDownHeartbeatResponse:
+		g.store.RecordHeartbeat(userID, false)
+	default:
+		linkType := "main"
+		if !receivedOnMain {
+			linkType = "sub"
+		}
+		slog.Debug("unhandled business message", "user_id", userID, "link", linkType, "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
 	}
 }
 
@@ -541,22 +520,13 @@ func (g *JT809Gateway) handleHeartbeat(session *goserver.AppSession, frame *jtt8
 
 	g.store.RecordHeartbeat(user, isMain)
 
-	if isMain {
-		// 主链路收到心跳请求，应答应该通过从链路发送（支持降级到主链路）
-		slog.Info("main link heartbeat", "session", session.ID, "user_id", user)
-		resp := jtt809.HeartbeatResponse{}
-		if err := g.sendResponseOnLink(true, user, frame, resp); err != nil {
-			slog.Error("send heartbeat response failed", "user_id", user, "err", err)
-			// 发送失败，返回nil避免go-server框架再次发送
-			return nil, nil
-		}
-		// 已通过 sendResponseOnLink 发送，返回 nil 避免重复发送
-		return nil, nil
-	} else {
-		// 从链路收到心跳请求（理论上不应该发生，因为我们是主动连接方）
-		slog.Info("sub link heartbeat", "session", session.ID, "user_id", user)
-		return g.simpleResponse(session, "sub", frame, jtt809.SubLinkHeartbeatResponse{})
+	// 主链路心跳请求，应答通过从链路发送（支持降级到主链路）
+	slog.Info("main link heartbeat", "session", session.ID, "user_id", user)
+	resp := jtt809.HeartbeatResponse{}
+	if err := g.sendResponseOnLink(true, user, frame, resp); err != nil {
+		slog.Error("send heartbeat response failed", "user_id", user, "err", err)
 	}
+	return nil, nil
 }
 
 func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
@@ -704,8 +674,11 @@ func (g *JT809Gateway) handlePlatformInfo(userID uint32, frame *jtt809.Frame) {
 
 
 func (g *JT809Gateway) handleAlarmInteract(session *goserver.AppSession, frame *jtt809.Frame) {
-	// 忽略主链路 0x1400 上报的报警数据，不用解析
-	slog.Debug("ignored alarm interact message", "session", session.ID, "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
+	sessionID := ""
+	if session != nil {
+		sessionID = session.ID
+	}
+	slog.Debug("ignored alarm interact message", "session", sessionID, "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
 }
 
 func (g *JT809Gateway) handleDisconnectInform(session *goserver.AppSession, frame *jtt809.Frame) {
@@ -748,12 +721,12 @@ func (g *JT809Gateway) handleRealTimeVideo(userID uint32, frame *jtt809.Frame) {
 }
 
 func (g *JT809Gateway) handleSubDisconnect(userID uint32, frame *jtt809.Frame) {
-	notify, err := jtt809.ParseSubLinkDisconnectNotify(frame)
+	notify, err := jtt809.ParseDisconnectInform(frame)
 	if err != nil {
-		slog.Warn("parse sub disconnect notify failed", "user_id", userID, "err", err)
+		slog.Warn("parse main disconnect notify failed", "user_id", userID, "err", err)
 		return
 	}
-	slog.Warn("sub link disconnect", "user_id", userID, "reason", notify.ReasonCode)
+	slog.Warn("main link disconnect notify", "user_id", userID, "code", notify.ErrorCode)
 }
 
 func isIPAllowed(ip string, allowIPs []string) bool {
