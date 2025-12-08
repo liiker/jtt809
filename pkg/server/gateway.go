@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -97,6 +98,11 @@ func (g *JT809Gateway) initServers() error {
 
 	_ = g.mainSrv.SetOnSessionClosed(g.onSessionClosed)
 	_ = g.mainSrv.SetOnNewSessionRegister(func(s *goserver.AppSession) {
+		ip := g.getClientIP(s)
+		if ip != "" {
+			slog.Info("main link connected", "session", s.ID, "remote_ip", ip)
+			return
+		}
 		slog.Info("main link connected", "session", s.ID)
 	})
 	return nil
@@ -110,11 +116,21 @@ func (g *JT809Gateway) handleMainMessage(session *goserver.AppSession, payload [
 		slog.Warn("decode main frame failed", "session", session.ID, "err", err)
 		return nil, nil
 	}
+	if _, ok := g.sessionUser(session); !ok && frame.BodyID != jtt809.MsgIDLoginRequest {
+		// 未登录成功前的报文直接忽略
+		slog.Warn("ignore message before login", "session", session.ID, "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
+		return nil, nil
+	}
 	switch frame.BodyID {
 	case jtt809.MsgIDLoginRequest:
 		return g.handleMainLogin(session, frame)
 	case jtt809.MsgIDHeartbeatRequest:
 		return g.handleHeartbeat(session, frame, true)
+	case jtt809.MsgIDDownHeartbeatResponse:
+		user, ok := g.sessionUser(session)
+		if ok {
+			g.store.RecordHeartbeat(user, false)
+		}
 	case jtt809.MsgIDLogoutRequest:
 		return g.simpleResponse(session, "main", frame, jtt809.LogoutResponse{})
 	case jtt809.MsgIDDynamicInfo:
@@ -150,11 +166,11 @@ func (g *JT809Gateway) handleSubMessage(userID uint32, payload []byte) {
 		// Active mode: we send this, we don't receive it
 		slog.Debug("received sub link login request on sub link", "user_id", userID)
 
-	case 0x9002: // Login Response
+	case jtt809.MsgIDDownlinkConnResp: // Login Response
 		// Handled in connectSubLink
 		slog.Debug("received sub link login response", "user_id", userID)
 
-	case 0x9006: // Heartbeat Response
+	case jtt809.MsgIDDownHeartbeatResponse: // Heartbeat Response
 		// 从链路心跳应答，记录心跳时间
 		g.store.RecordHeartbeat(userID, false)
 
@@ -178,8 +194,8 @@ func (g *JT809Gateway) handleSubMessage(userID uint32, payload []byte) {
 		slog.Info("sub link received authorize msg (main link may be down)", "user_id", userID)
 		g.handleAuthorizeFromSub(userID, frame)
 
-	case 0x9007: // Disconnect Notify
-		slog.Warn("sub link disconnect notify", "user_id", userID)
+	case jtt809.MsgIDDownDisconnectInform: // Disconnect Notify
+		g.handleSubDisconnect(userID, frame)
 
 	default:
 		slog.Debug("unhandled sub message", "user_id", userID, "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
@@ -192,8 +208,9 @@ func (g *JT809Gateway) handleMainLogin(session *goserver.AppSession, frame *jtt8
 		slog.Warn("parse main login failed", "session", session.ID, "err", err)
 		return nil, nil
 	}
-	acc, resp := g.auth.Authenticate(req)
-	slog.Info("main login request", "session", session.ID, "user_id", req.UserID, "gnss", frame.Header.GNSSCenterID, "result", resp.Result)
+	clientIP := g.getClientIP(session)
+	acc, resp := g.auth.Authenticate(req, clientIP)
+	slog.Info("main login request", "session", session.ID, "user_id", req.UserID, "gnss", frame.Header.GNSSCenterID, "ip", clientIP, "result", resp.Result)
 	if resp.Result == jtt809.LoginOK {
 		session.SetAttr("userID", req.UserID)
 		session.SetAttr("link", "main")
@@ -205,13 +222,18 @@ func (g *JT809Gateway) handleMainLogin(session *goserver.AppSession, frame *jtt8
 		}
 
 		// Start Sub Link Connection
-		go g.connectSubLinkWithRetry(req.UserID)
+		go g.connectSubLinkWithRetry(req.UserID, false)
 	}
 	// 主链路登录应答应该在主链路返回（使用相同链路）
-	return g.simpleResponse(session, "main", frame, resp)
+	data, respErr := g.simpleResponse(session, "main", frame, resp)
+	if resp.Result != jtt809.LoginOK {
+		// 登录失败后立即断开
+		session.Close("login failed")
+	}
+	return data, respErr
 }
 
-func (g *JT809Gateway) connectSubLinkWithRetry(userID uint32) {
+func (g *JT809Gateway) connectSubLinkWithRetry(userID uint32, isReconnect bool) {
 	// 设置重连标志，如果已经在重连则直接返回
 	if !g.store.SetReconnecting(userID, true) {
 		slog.Info("sub link already reconnecting, skip", "user_id", userID)
@@ -219,7 +241,13 @@ func (g *JT809Gateway) connectSubLinkWithRetry(userID uint32) {
 	}
 	defer g.store.SetReconnecting(userID, false)
 
-	for {
+	// 重试次数策略
+	maxRetries := 3
+	if !isReconnect {
+		maxRetries = 1
+	}
+
+	for i := 0; i < maxRetries; i++ {
 		// 检查从链路是否已连接（防止竞态条件导致重复连接）
 		_, subActive := g.store.GetLinkStatus(userID)
 		if subActive {
@@ -246,8 +274,52 @@ func (g *JT809Gateway) connectSubLinkWithRetry(userID uint32) {
 		if g.connectSubLink(snap.DownLinkIP, snap.DownLinkPort, userID, snap.GNSSCenterID, snap.VerifyCode) {
 			return
 		}
-		time.Sleep(30 * time.Second)
-		slog.Info("retrying sub link connection", "user_id", userID)
+
+		// 仅在重连模式下等待重试
+		if isReconnect && i < maxRetries-1 {
+			time.Sleep(10 * time.Second) // 缩短等待时间以便快速重试
+			slog.Info("retrying sub link connection", "user_id", userID, "attempt", i+1)
+		}
+	}
+
+	// 重试失败，发送从链路断开通知
+	errorCode := jtt809.DisconnectCannotConnectSub // 情景2：无法连接指定IP端口 (0x00)
+	if isReconnect {
+		errorCode = jtt809.DisconnectSubLinkBroken // 情景1：重连三次失败 (0x01)
+	}
+
+	slog.Warn("sub link connection failed, sending notification", "user_id", userID, "error_code", errorCode)
+	g.sendDownDisconnectInform(userID, errorCode)
+}
+
+// sendDownDisconnectInform 发送从链路断开通知 (0x9007)
+func (g *JT809Gateway) sendDownDisconnectInform(userID uint32, code jtt809.DisconnectErrorCode) {
+	snap, ok := g.store.Snapshot(userID)
+	if !ok || snap.MainSessionID == "" {
+		return
+	}
+
+	// 获取主链路 Session
+	sessionID := snap.MainSessionID
+	_, err := g.mainSrv.GetSessionByID(sessionID)
+	if err != nil {
+		slog.Warn("get main session failed for disconnect inform", "user_id", userID, "err", err)
+		return
+	}
+
+	// 构造消息
+	msg := jtt809.DownDisconnectInform{ErrorCode: code}
+	// 注意：这里需要构造完整的 0x9007 报文，并复用 Header 信息（流水号自动生成）
+	fakeHeader := jtt809.Header{
+		GNSSCenterID: snap.GNSSCenterID,
+		Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0}, // 使用默认或存储的版本
+		EncryptFlag:  0,
+		EncryptKey:   0,
+	}
+
+	// 发送
+	if err := g.sendResponseOnLink(true, userID, &jtt809.Frame{Header: fakeHeader, BodyID: msg.MsgID()}, msg); err != nil {
+		slog.Warn("send 0x9007 failed", "user_id", userID, "err", err)
 	}
 }
 
@@ -375,7 +447,7 @@ func (g *JT809Gateway) reconnectSubLink(userID uint32) {
 		return
 	}
 	slog.Info("attempting sub link reconnect", "user_id", userID)
-	g.connectSubLinkWithRetry(userID)
+	g.connectSubLinkWithRetry(userID, true)
 }
 
 func (g *JT809Gateway) healthCheckLoop(ctx context.Context) {
@@ -417,7 +489,7 @@ func (g *JT809Gateway) checkConnections() {
 		// 检查从链路是否需要重连
 		if !snap.SubConnected && snap.DownLinkIP != "" && snap.DownLinkPort > 0 {
 			slog.Warn("sub link disconnected, triggering reconnect", "user_id", snap.UserID)
-			go g.connectSubLinkWithRetry(snap.UserID)
+			go g.connectSubLinkWithRetry(snap.UserID, true)
 		}
 	}
 	// 检查车辆定位状态
@@ -425,7 +497,7 @@ func (g *JT809Gateway) checkConnections() {
 }
 
 func (g *JT809Gateway) keepAliveSubLink(ctx context.Context, c *client.SimpleClient, userID uint32) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -824,13 +896,37 @@ func (g *JT809Gateway) handleRealTimeVideo(session *goserver.AppSession, frame *
 	}
 }
 
-func (g *JT809Gateway) handleSubDisconnect(session *goserver.AppSession, frame *jtt809.Frame) {
+func (g *JT809Gateway) handleSubDisconnect(userID uint32, frame *jtt809.Frame) {
 	notify, err := jtt809.ParseSubLinkDisconnectNotify(frame)
 	if err != nil {
-		slog.Warn("parse sub disconnect notify failed", "session", session.ID, "err", err)
+		slog.Warn("parse sub disconnect notify failed", "user_id", userID, "err", err)
 		return
 	}
-	slog.Warn("sub link disconnect", "session", session.ID, "reason", notify.ReasonCode)
+	slog.Warn("sub link disconnect", "user_id", userID, "reason", notify.ReasonCode)
+}
+
+func isIPAllowed(ip string, allowIPs []string) bool {
+	if len(allowIPs) == 0 {
+		return true
+	}
+	for _, allow := range allowIPs {
+		if allow == "*" {
+			return true
+		}
+		if ip != "" && ip == allow {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *JT809Gateway) getClientIP(session *goserver.AppSession) string {
+	addr := session.RemoteAddr()
+	host, _, err := net.SplitHostPort(addr.String())
+	if err == nil {
+		return host
+	}
+	return addr.String()
 }
 
 // shouldUseSameLink 判断响应是否应该使用与请求相同的链路
@@ -839,9 +935,9 @@ func (g *JT809Gateway) handleSubDisconnect(session *goserver.AppSession, frame *
 func shouldUseSameLink(msgID uint16) bool {
 	switch msgID {
 	case jtt809.MsgIDLoginRequest, // 0x1001 主链路登录请求
-		jtt809.MsgIDLoginResponse,   // 0x1002 主链路登录应答
-		jtt809.MsgIDDownlinkConnReq, // 0x9001 从链路登录请求
-		0x9002:                      // 从链路登录应答
+		jtt809.MsgIDLoginResponse,    // 0x1002 主链路登录应答
+		jtt809.MsgIDDownlinkConnReq,  // 0x9001 从链路登录请求
+		jtt809.MsgIDDownlinkConnResp: // 从链路登录应答
 		return true
 	default:
 		return false
@@ -1129,4 +1225,56 @@ func (g *JT809Gateway) checkVehiclePositions() {
 			}
 		}
 	}
+}
+
+// SendDownlinkMessage 发送下行消息，支持主/从链路自动选择与降级
+// 优先使用从链路，不可用时降级到主链路
+func (g *JT809Gateway) SendDownlinkMessage(userID uint32, body jtt809.Body) error {
+	snap, ok := g.store.Snapshot(userID)
+	if !ok || snap.MainSessionID == "" {
+		return fmt.Errorf("platform %d not online", userID)
+	}
+
+	header := jtt809.Header{
+		GNSSCenterID: snap.GNSSCenterID,
+		Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
+		EncryptFlag:  0,
+		EncryptKey:   0,
+		BusinessType: body.MsgID(),
+	}
+	pkg := jtt809.Package{
+		Header: header,
+		Body:   body,
+	}
+	data, err := jtt809.EncodePackage(pkg)
+	if err != nil {
+		return fmt.Errorf("encode package: %w", err)
+	}
+
+	_, subActive := g.store.GetLinkStatus(userID)
+
+	// 优先尝试从链路
+	if subActive {
+		g.store.mu.RLock()
+		subClient := g.store.platforms[userID].SubClient
+		g.store.mu.RUnlock()
+		if subClient != nil {
+			g.logPacket("sub", "send", fmt.Sprintf("%d", userID), data)
+			if err := subClient.Send(data); err == nil {
+				return nil
+			}
+			slog.Warn("send on sub link failed, try fallback", "user_id", userID, "err", err)
+		}
+	}
+
+	// 降级到主链路
+	if sessionID := snap.MainSessionID; sessionID != "" {
+		if session, err := g.mainSrv.GetSessionByID(sessionID); err == nil {
+			slog.Info("sub link unavailable, fallback to main link", "user_id", userID, "msg_id", fmt.Sprintf("0x%04X", body.MsgID()))
+			g.logPacket("main(fallback)", "send", session.ID, data)
+			return session.Send(data)
+		}
+	}
+
+	return fmt.Errorf("no available link for platform %d", userID)
 }

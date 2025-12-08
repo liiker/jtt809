@@ -81,3 +81,17 @@ const (
 	SupervisionLevelUrgent SupervisionLevel = 0x00
 	SupervisionLevelNormal SupervisionLevel = 0x01
 )
+
+// DisconnectErrorCode 表示断开连接错误代码
+type DisconnectErrorCode byte
+
+const (
+	// 0x1007 错误代码
+	DisconnectMainLinkBroken DisconnectErrorCode = 0x00 // 主链路断开
+	DisconnectOther          DisconnectErrorCode = 0x01 // 其他
+
+	// 0x9007 错误代码
+	DisconnectCannotConnectSub DisconnectErrorCode = 0x00 // 无法连接下级平台指定的服务 IP 与端口
+	DisconnectSubLinkBroken    DisconnectErrorCode = 0x01 // 上级平台客户端与下级平台服务端断开
+	DisconnectSubOther         DisconnectErrorCode = 0xFF // 其他
+)

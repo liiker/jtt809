@@ -23,6 +23,7 @@ type Account struct {
 	UserID       uint32
 	Password     string
 	GnssCenterID uint32
+	AllowIPs     []string
 }
 
 // normalizeHostPort 将 host:port 字符串拆分为 host 与 port，便于 go-server 初始化。
@@ -47,15 +48,19 @@ type MultiAccountFlag []Account
 func (m *MultiAccountFlag) String() string {
 	parts := make([]string, 0, len(*m))
 	for _, acc := range *m {
-		parts = append(parts, fmt.Sprintf("%d:%s:%d", acc.UserID, acc.Password, acc.GnssCenterID))
+		allow := "*"
+		if len(acc.AllowIPs) > 0 {
+			allow = strings.Join(acc.AllowIPs, ",")
+		}
+		parts = append(parts, fmt.Sprintf("%d:%s:%d:%s", acc.UserID, acc.Password, acc.GnssCenterID, allow))
 	}
 	return strings.Join(parts, ",")
 }
 
 func (m *MultiAccountFlag) Set(value string) error {
-	parts := strings.Split(value, ":")
-	if len(parts) != 3 {
-		return errors.New("account must be formatted as userID:password:gnssCenterID")
+	parts := strings.SplitN(value, ":", 4)
+	if len(parts) < 3 {
+		return errors.New("account must be formatted as userID:password:gnssCenterID[:allowIPs]")
 	}
 	userID, err := strconv.ParseUint(parts[0], 10, 32)
 	if err != nil {
@@ -65,12 +70,33 @@ func (m *MultiAccountFlag) Set(value string) error {
 	if err != nil {
 		return fmt.Errorf("parse verify code %q: %w", parts[2], err)
 	}
+	allowIPs := parseAllowIPs(parts)
 	acc := Account{
 		UserID:       uint32(userID),
 		Password:     parts[1],
 		GnssCenterID: uint32(gnssCenterID),
+		AllowIPs:     allowIPs,
 	}
 
 	*m = append(*m, acc)
 	return nil
+}
+
+func parseAllowIPs(parts []string) []string {
+	if len(parts) < 4 {
+		return []string{"*"}
+	}
+	raw := strings.Split(parts[3], ",")
+	allow := make([]string, 0, len(raw))
+	for _, ip := range raw {
+		ip = strings.TrimSpace(ip)
+		if ip == "" {
+			continue
+		}
+		allow = append(allow, ip)
+	}
+	if len(allow) == 0 {
+		return []string{"*"}
+	}
+	return allow
 }

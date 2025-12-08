@@ -23,7 +23,7 @@ func NewAuthenticator(accounts []Account) *Authenticator {
 }
 
 // Authenticate 校验账号密码，返回账号信息与登录应答。
-func (a *Authenticator) Authenticate(req jtt809.LoginRequest) (Account, jtt809.LoginResponse) {
+func (a *Authenticator) Authenticate(req jtt809.LoginRequest, clientIP string) (Account, jtt809.LoginResponse) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	acc, ok := a.accounts[req.UserID]
@@ -32,6 +32,10 @@ func (a *Authenticator) Authenticate(req jtt809.LoginRequest) (Account, jtt809.L
 	}
 	resp := jtt809.LoginResponse{
 		Result: jtt809.LoginOK,
+	}
+	if !isIPAllowed(clientIP, acc.AllowIPs) {
+		resp.Result = jtt809.LoginIPError
+		return acc, resp
 	}
 	if req.GnssCenterID != acc.GnssCenterID {
 		resp.Result = jtt809.LoginGnssCenterIDError

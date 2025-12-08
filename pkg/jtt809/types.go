@@ -15,18 +15,22 @@ const (
 	endFlag   byte = 0x5d
 
 	// MsgID* 定义 JT/T 809-2019 主链路与从链路常用业务 ID。
-	MsgIDLoginRequest      uint16 = 0x1001
-	MsgIDLoginResponse     uint16 = 0x1002
-	MsgIDHeartbeatRequest  uint16 = 0x1005
-	MsgIDHeartbeatResponse uint16 = 0x1006
-	MsgIDDynamicInfo       uint16 = 0x1200
-	MsgIDAlarmInteract     uint16 = 0x1400
-	MsgIDPlatformInfo      uint16 = 0x1300
-	MsgIDDisconnNotify     uint16 = 0x1007
-	MsgIDCloseNotify       uint16 = 0x9008
-	MsgIDDownlinkConnReq   uint16 = 0x9001
-	MsgIDLogoutRequest     uint16 = 0x1003
-	MsgIDLogoutResponse    uint16 = 0x1004
+	MsgIDLoginRequest          uint16 = 0x1001
+	MsgIDLoginResponse         uint16 = 0x1002
+	MsgIDLogoutRequest         uint16 = 0x1003
+	MsgIDLogoutResponse        uint16 = 0x1004
+	MsgIDHeartbeatRequest      uint16 = 0x1005
+	MsgIDHeartbeatResponse     uint16 = 0x1006
+	MsgIDDynamicInfo           uint16 = 0x1200
+	MsgIDAlarmInteract         uint16 = 0x1400
+	MsgIDPlatformInfo          uint16 = 0x1300
+	MsgIDDisconnNotify         uint16 = 0x1007
+	MsgIDDownlinkConnReq       uint16 = 0x9001
+	MsgIDDownlinkConnResp      uint16 = 0x9002
+	MsgIDDownHeartbeatRequest  uint16 = 0x9005
+	MsgIDDownHeartbeatResponse uint16 = 0x9006
+	MsgIDDownDisconnectInform  uint16 = 0x9007
+	MsgIDCloseNotify           uint16 = 0x9008
 
 	// 从链路下行业务
 	MsgIDDownExgMsg uint16 = 0x9200 // 从链路车辆动态信息交换业务

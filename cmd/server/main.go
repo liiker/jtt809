@@ -122,7 +122,7 @@ func parseConfig() (server.Config, error) {
 		idleSec   = flag.Int("idle", 300, "连接空闲超时时间，单位秒，<=0 表示不超时")
 		accountFS server.MultiAccountFlag
 	)
-	flag.Var(&accountFS, "account", "下级平台账号，格式 userID:password:gnssCenterID，可重复指定")
+	flag.Var(&accountFS, "account", "下级平台账号，格式 userID:password:gnssCenterID[:allowIPs]，allowIPs 逗号分隔，可重复指定")
 	flag.Parse()
 
 	cfg := server.Config{
@@ -142,6 +142,7 @@ func parseConfig() (server.Config, error) {
 			UserID:       10001,
 			Password:     "pass809",
 			GnssCenterID: 324469864,
+			AllowIPs:     []string{"*"},
 		})
 	}
 	cfg.Accounts = accountFS

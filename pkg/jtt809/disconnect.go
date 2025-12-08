@@ -22,12 +22,12 @@ func (LogoutResponse) Encode() ([]byte, error) { return []byte{}, nil }
 
 // DisconnectInform 主链路断开通知（0x1007），从链路下发，用于告知登录失效或链路异常原因。
 type DisconnectInform struct {
-	ErrorCode byte
+	ErrorCode DisconnectErrorCode
 }
 
 func (DisconnectInform) MsgID() uint16 { return MsgIDDisconnNotify }
 func (d DisconnectInform) Encode() ([]byte, error) {
-	return []byte{d.ErrorCode}, nil
+	return []byte{byte(d.ErrorCode)}, nil
 }
 
 // ParseDisconnectInform 解析主链路断开通知，校验业务 ID 与载荷长度。
@@ -41,7 +41,31 @@ func ParseDisconnectInform(frame *Frame) (*DisconnectInform, error) {
 	if len(frame.RawBody) < 1 {
 		return nil, errors.New("body too short")
 	}
-	return &DisconnectInform{ErrorCode: frame.RawBody[0]}, nil
+	return &DisconnectInform{ErrorCode: DisconnectErrorCode(frame.RawBody[0])}, nil
+}
+
+// DownDisconnectInform 从链路断开通知消息（0x9007），主链路下发。
+type DownDisconnectInform struct {
+	ErrorCode DisconnectErrorCode
+}
+
+func (DownDisconnectInform) MsgID() uint16 { return MsgIDDownDisconnectInform }
+func (d DownDisconnectInform) Encode() ([]byte, error) {
+	return []byte{byte(d.ErrorCode)}, nil
+}
+
+// ParseDownDisconnectInform 解析从链路断开通知消息
+func ParseDownDisconnectInform(frame *Frame) (*DownDisconnectInform, error) {
+	if frame == nil {
+		return nil, errors.New("frame is nil")
+	}
+	if frame.BodyID != MsgIDDownDisconnectInform {
+		return nil, errors.New("unexpected body id")
+	}
+	if len(frame.RawBody) < 1 {
+		return nil, errors.New("body too short")
+	}
+	return &DownDisconnectInform{ErrorCode: DisconnectErrorCode(frame.RawBody[0])}, nil
 }
 
 // SubLinkCloseNotify 上级主动关闭从链路通知（0x9008），下级收到后可释放连接资源。

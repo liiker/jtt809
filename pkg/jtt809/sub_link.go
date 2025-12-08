@@ -86,7 +86,7 @@ func BuildSubLinkLoginPackage(header Header, req SubLinkLoginRequest) ([]byte, e
 
 // BuildSubLinkHeartbeat 构造从链路心跳请求完整报文（含转义）。
 func BuildSubLinkHeartbeat(header Header) ([]byte, error) {
-	header.BusinessType = 0x9005
+	header.BusinessType = MsgIDDownHeartbeatRequest
 	return EncodePackage(Package{Header: header, Body: SubLinkHeartbeatRequest{}})
 }
 

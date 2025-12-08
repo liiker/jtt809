@@ -116,7 +116,7 @@ func main() {
 }
 
 func sendMainHeartbeat(conn net.Conn, msgSN *uint32) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -516,7 +516,7 @@ func (r rawBody) Encode() ([]byte, error) {
 }
 
 // buildSubBusinessBody 构建子业务消息体（车牌号+颜色+子业务ID+长度+载荷）
-func buildSubBusinessBody(plate string, color byte, subID uint16, payload []byte) ([]byte, error) {
+func buildSubBusinessBody(plate string, color jtt809.PlateColor, subID uint16, payload []byte) ([]byte, error) {
 	plateBytes, err := jtt809.EncodeGBK(plate)
 	if err != nil {
 		return nil, fmt.Errorf("encode plate: %w", err)
@@ -525,7 +525,7 @@ func buildSubBusinessBody(plate string, color byte, subID uint16, payload []byte
 	field := make([]byte, 21)
 	copy(field, plateBytes)
 	buf = append(buf, field...)
-	buf = append(buf, color)
+	buf = append(buf, byte(color))
 	var tmp [2]byte
 	binary.BigEndian.PutUint16(tmp[:], subID)
 	buf = append(buf, tmp[:]...)

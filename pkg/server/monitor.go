@@ -2,7 +2,6 @@ package server
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 
 	"github.com/zboyco/jtt809/pkg/jtt809"
@@ -39,19 +38,6 @@ func (g *JT809Gateway) RequestMonitorEnd(req MonitorRequest) error {
 }
 
 func (g *JT809Gateway) sendMonitorRequest(req MonitorRequest, startup bool) error {
-	g.store.mu.RLock()
-	state := g.store.platforms[req.UserID]
-	g.store.mu.RUnlock()
-	if state == nil {
-		return fmt.Errorf("platform %d not online", req.UserID)
-	}
-	if state.SubClient == nil {
-		return errors.New("sub link is not established")
-	}
-	if state.GNSSCenterID == 0 {
-		slog.Warn("skip monitor request, missing GNSSCenterID", "user_id", req.UserID, "vehicle", req.VehicleNo)
-		return fmt.Errorf("gnss_center_id is missing for platform %d, abort send", req.UserID)
-	}
 	var body jtt809.Body
 	if startup {
 		body = jtt809.ApplyForMonitorStartup{
@@ -66,20 +52,11 @@ func (g *JT809Gateway) sendMonitorRequest(req MonitorRequest, startup bool) erro
 			ReasonCode:   jtt809.MonitorReasonCode(req.ReasonCode),
 		}
 	}
-	msg := jtt809.Package{
-		Header: jtt809.Header{
-			GNSSCenterID: state.GNSSCenterID,
-		},
-		Body: body,
+
+	if err := g.SendDownlinkMessage(req.UserID, body); err != nil {
+		return err
 	}
-	data, err := jtt809.EncodePackage(msg)
-	if err != nil {
-		return fmt.Errorf("encode package: %w", err)
-	}
-	g.logPacket("sub", "send", fmt.Sprintf("%d", req.UserID), data)
-	if err := state.SubClient.Send(data); err != nil {
-		return fmt.Errorf("send frame: %w", err)
-	}
+
 	action := "startup"
 	if !startup {
 		action = "end"
