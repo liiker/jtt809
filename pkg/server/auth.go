@@ -57,3 +57,35 @@ func (a *Authenticator) Lookup(userID uint32) (Account, bool) {
 	acc, ok := a.accounts[userID]
 	return acc, ok
 }
+
+// AddAccounts 批量新增或更新账号，返回被覆盖的用户ID列表。
+func (a *Authenticator) AddAccounts(accs []Account) []uint32 {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	replaced := make([]uint32, 0, len(accs))
+	for _, acc := range accs {
+		if _, ok := a.accounts[acc.UserID]; ok {
+			replaced = append(replaced, acc.UserID)
+		}
+		a.accounts[acc.UserID] = acc
+	}
+	return replaced
+}
+
+// AddAccount 新增或更新账号。
+// 返回值表示是否覆盖了已有账号。
+func (a *Authenticator) AddAccount(acc Account) bool {
+	replaced := a.AddAccounts([]Account{acc})
+	return len(replaced) > 0
+}
+
+// RemoveAccount 删除账号，返回是否存在该账号。
+func (a *Authenticator) RemoveAccount(userID uint32) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if _, ok := a.accounts[userID]; !ok {
+		return false
+	}
+	delete(a.accounts, userID)
+	return true
+}

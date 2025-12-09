@@ -71,6 +71,74 @@ func (g *JT809Gateway) SetCallbacks(callbacks *Callbacks) {
 	g.callbacks = callbacks
 }
 
+// AddAccount 动态新增或更新账号。
+func (g *JT809Gateway) AddAccount(acc Account) {
+	g.AddAccounts([]Account{acc})
+}
+
+// AddAccounts 批量新增或更新账号。
+func (g *JT809Gateway) AddAccounts(accs []Account) {
+	if len(accs) == 0 {
+		return
+	}
+
+	replaced := g.auth.AddAccounts(accs)
+	replacedSet := make(map[uint32]struct{}, len(replaced))
+	for _, uid := range replaced {
+		replacedSet[uid] = struct{}{}
+	}
+
+	for _, acc := range accs {
+		action := "added"
+		if _, ok := replacedSet[acc.UserID]; ok {
+			action = "updated"
+		}
+		slog.Info("account "+action, "user_id", acc.UserID, "gnss_center_id", acc.GnssCenterID)
+	}
+}
+
+// RemoveAccount 动态删除账号，并断开该账号所有链路。
+func (g *JT809Gateway) RemoveAccount(userID uint32) {
+	removed := g.auth.RemoveAccount(userID)
+	g.disconnectUserLinks(userID)
+	if !removed {
+		slog.Warn("remove account skipped in auth, still cleaned links", "user_id", userID)
+	}
+}
+
+// disconnectUserLinks 断开指定账号的主/从链路并清理状态。
+func (g *JT809Gateway) disconnectUserLinks(userID uint32) {
+	mainSessionID, subClient, cancel, exists := g.store.PlatformLinks(userID)
+
+	// 先取消从链路上下文，停止保活和读循环
+	if cancel != nil {
+		cancel()
+	}
+	if subClient != nil {
+		subClient.Close()
+	}
+
+	// 再关闭主链路
+	if mainSessionID != "" && g.mainSrv != nil {
+		session, err := g.mainSrv.GetSessionByID(mainSessionID)
+		if err != nil {
+			slog.Warn("close main link for removed account failed", "user_id", userID, "err", err)
+		} else {
+			session.Close("account removed")
+		}
+	}
+
+	// 最后清理平台状态，防止关闭期间并发写回
+	g.store.RemovePlatform(userID)
+
+	if !exists && mainSessionID == "" && subClient == nil && cancel == nil {
+		slog.Info("account cleanup skipped, no platform state", "user_id", userID)
+		return
+	}
+
+	slog.Info("account removed and links closed", "user_id", userID)
+}
+
 // Start 同时启动主链路、从链路服务，并阻塞直至 ctx 结束。
 func (g *JT809Gateway) Start(ctx context.Context) error {
 	var startErr error

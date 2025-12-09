@@ -362,6 +362,33 @@ func (s *PlatformStore) GetLinkStatus(userID uint32) (mainActive bool, subActive
 	return state.MainSessionID != "", state.SubClient != nil
 }
 
+// PlatformLinks 获取平台链路句柄，用于外部关闭。
+func (s *PlatformStore) PlatformLinks(userID uint32) (mainSessionID string, subClient *client.SimpleClient, cancel context.CancelFunc, ok bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	state, ok := s.platforms[userID]
+	if !ok {
+		return "", nil, nil, false
+	}
+	return state.MainSessionID, state.SubClient, state.SubLinkCancel, true
+}
+
+// RemovePlatform 删除平台状态与 session 索引。
+func (s *PlatformStore) RemovePlatform(userID uint32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.platforms[userID]; !ok {
+		return
+	}
+
+	for sid, uid := range s.sessionIndex {
+		if uid == userID {
+			delete(s.sessionIndex, sid)
+		}
+	}
+	delete(s.platforms, userID)
+}
+
 func (s *PlatformStore) ensurePlatformLocked(userID uint32) *PlatformState {
 	state, ok := s.platforms[userID]
 	if ok {
