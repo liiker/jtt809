@@ -1105,22 +1105,3 @@ func (g *JT809Gateway) checkVehiclePositions() {
 		}
 	}
 }
-
-// SendDownlinkMessage 发送下行消息（主动下发）
-// 使用统一的发送方法，根据消息类型自动选择链路并支持降级
-func (g *JT809Gateway) SendDownlinkMessage(userID uint32, body jtt809.Body) error {
-	snap, ok := g.store.Snapshot(userID)
-	if !ok || snap.MainSessionID == "" {
-		return fmt.Errorf("platform %d not online", userID)
-	}
-
-	header := jtt809.Header{
-		GNSSCenterID: snap.GNSSCenterID,
-		Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
-		EncryptFlag:  0,
-		EncryptKey:   0,
-		BusinessType: body.MsgID(),
-	}
-
-	return g.SendToSubordinate(userID, header, body)
-}

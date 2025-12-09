@@ -39,9 +39,10 @@ func (s *Server) Start() error {
 	http.HandleFunc("/proxy.flv", s.handleProxyFLV)
 
 	fmt.Println("===================================================")
-	fmt.Println("🚀 JT/T 1078-2016")
+	fmt.Println("🚀 JT/T 1078-2016 RTP 代理服务器")
 	fmt.Println("✨ 功能: 视频秒开 | 多路复用 | 延迟自动修复 | 全链路日志")
-	fmt.Printf("👂 监听端口: %s\n", s.port)
+	fmt.Printf("💡 裸流: http://localhost%s/proxy?url=[JT/T 1078-2016 协议视频源地址]\n", s.port)
+	fmt.Printf("💡 FLV: http://localhost%s/proxy.flv?url=[JT/T 1078-2016 协议视频源地址]\n", s.port)
 	fmt.Println("===================================================")
 
 	return http.ListenAndServe(s.port, nil)

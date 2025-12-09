@@ -22,6 +22,57 @@ type VideoRequest struct {
 	GnssHex      string            `json:"gnss_hex,omitempty"`
 }
 
+// VideoStreamInfo 聚合拼接视频直播流所需的关键信息。
+type VideoStreamInfo struct {
+	ServerIP     string            `json:"server_ip"`
+	ServerPort   uint16            `json:"server_port"`
+	VehicleNo    string            `json:"vehicle_no"`
+	VehicleColor jtt809.PlateColor `json:"vehicle_color"`
+	AuthorizeCode string           `json:"authorize_code"`
+	PlatformID   string            `json:"platform_id,omitempty"`
+	Result       byte              `json:"result"`
+}
+
+// RequestVideoStreamByPlate 仅通过车牌与颜色发起实时视频请求。
+// 内部自动查找车辆归属的平台，复用 RequestVideoStream 的发送逻辑。
+func (g *JT809Gateway) RequestVideoStreamByPlate(plate string, color jtt809.PlateColor, channelID byte, avItemType byte, gnssHex string) error {
+	snap, _, err := g.findVehicleSnapshot(plate, color)
+	if err != nil {
+		return err
+	}
+	return g.RequestVideoStream(VideoRequest{
+		UserID:       snap.UserID,
+		VehicleNo:    plate,
+		VehicleColor: color,
+		ChannelID:    channelID,
+		AVItemType:   avItemType,
+		GnssHex:      gnssHex,
+	})
+}
+
+// VideoStreamInfoByPlate 返回拼装视频直播流所需的服务器、车牌与时效口令信息。
+func (g *JT809Gateway) VideoStreamInfoByPlate(plate string, color jtt809.PlateColor) (VideoStreamInfo, error) {
+	snap, vehicle, err := g.findVehicleSnapshot(plate, color)
+	if err != nil {
+		return VideoStreamInfo{}, err
+	}
+	if vehicle.LastVideoAck == nil {
+		return VideoStreamInfo{}, fmt.Errorf("vehicle %s (color %d) has no video response yet", plate, vehicle.VehicleColor)
+	}
+	if snap.AuthCode == "" {
+		return VideoStreamInfo{}, fmt.Errorf("authorize_code not available for platform %d", snap.UserID)
+	}
+	return VideoStreamInfo{
+		ServerIP:      vehicle.LastVideoAck.ServerIP,
+		ServerPort:    vehicle.LastVideoAck.ServerPort,
+		VehicleNo:     vehicle.VehicleNo,
+		VehicleColor:  vehicle.VehicleColor,
+		AuthorizeCode: snap.AuthCode,
+		PlatformID:    snap.PlatformID,
+		Result:        vehicle.LastVideoAck.Result,
+	}, nil
+}
+
 // RequestVideoStream 通过从链路向下级平台发送实时视频请求（0x9801 下行实时音视频）。
 // 注意：0x9801 是上级→下级的下行消息，应该通过从链路发送；
 //
@@ -41,16 +92,8 @@ func (g *JT809Gateway) RequestVideoStream(req VideoRequest) error {
 	if !ok {
 		return fmt.Errorf("platform %d not online", req.UserID)
 	}
-	// 视频请求是下行消息（0x9801），应该通过从链路发送
-	if !snap.SubConnected {
-		return errors.New("sub link is not established")
-	}
 	if snap.GNSSCenterID == 0 {
 		return fmt.Errorf("gnss_center_id is missing for platform %d, abort send", req.UserID)
-	}
-	subClient, ok := g.store.GetSubClient(req.UserID)
-	if !ok {
-		return errors.New("sub link client not available")
 	}
 	var (
 		gnssData []byte
@@ -79,23 +122,14 @@ func (g *JT809Gateway) RequestVideoStream(req VideoRequest) error {
 	if err != nil {
 		return err
 	}
-	msg := jtt809.Package{
-		Header: jtt809.Header{
-			GNSSCenterID: snap.GNSSCenterID,
-			BusinessType: jtt809.MsgIDDownRealTimeVideo,
-		},
-		Body: rawBody{
-			msgID:   jtt809.MsgIDDownRealTimeVideo,
-			payload: subBody,
-		},
+	header := jtt809.Header{
+		GNSSCenterID: snap.GNSSCenterID,
 	}
-	data, err := jtt809.EncodePackage(msg)
-	if err != nil {
-		return fmt.Errorf("encode package: %w", err)
-	}
-	// 通过从链路发送
-	if err := subClient.Send(data); err != nil {
-		return fmt.Errorf("send frame: %w", err)
+	if err := g.SendToSubordinate(req.UserID, header, rawBody{
+		msgID:   jtt809.MsgIDDownRealTimeVideo,
+		payload: subBody,
+	}); err != nil {
+		return fmt.Errorf("send video request: %w", err)
 	}
 	slog.Info("video request sent", "user_id", req.UserID, "plate", req.VehicleNo, "channel", req.ChannelID)
 	return nil
@@ -131,4 +165,24 @@ func buildSubBusinessBody(plate string, color jtt809.PlateColor, subID uint16, p
 	buf = append(buf, length...)
 	buf = append(buf, payload...)
 	return buf, nil
+}
+
+// findVehicleSnapshot 在本地缓存中按车牌和颜色查找车辆所在平台及车辆视图。
+func (g *JT809Gateway) findVehicleSnapshot(plate string, color jtt809.PlateColor) (PlatformSnapshot, *VehicleSnapshot, error) {
+	if strings.TrimSpace(plate) == "" {
+		return PlatformSnapshot{}, nil, errors.New("plate is required")
+	}
+	if color == 0 {
+		color = jtt809.PlateColorBlue
+	}
+	snapshots := g.store.Snapshots()
+	for _, snap := range snapshots {
+		for _, v := range snap.Vehicles {
+			if v.VehicleNo == plate && v.VehicleColor == color {
+				vehicle := v // 创建副本，避免引用循环变量
+				return snap, &vehicle, nil
+			}
+		}
+	}
+	return PlatformSnapshot{}, nil, fmt.Errorf("vehicle %s with color %d not found", plate, color)
 }

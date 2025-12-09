@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/zboyco/jtt809/pkg/jtt809"
@@ -53,7 +54,18 @@ func (g *JT809Gateway) sendMonitorRequest(req MonitorRequest, startup bool) erro
 		}
 	}
 
-	if err := g.SendDownlinkMessage(req.UserID, body); err != nil {
+	snap, ok := g.store.Snapshot(req.UserID)
+	if !ok || snap.MainSessionID == "" {
+		return errors.New("platform not online")
+	}
+	if snap.GNSSCenterID == 0 {
+		return fmt.Errorf("gnss_center_id is missing for platform %d, abort send", req.UserID)
+	}
+
+	header := jtt809.Header{
+		GNSSCenterID: snap.GNSSCenterID,
+	}
+	if err := g.SendToSubordinate(req.UserID, header, body); err != nil {
 		return err
 	}
 

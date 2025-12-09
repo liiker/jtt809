@@ -468,6 +468,142 @@
             display: inline-flex;
             align-items: center;
         }
+
+        .action-cell {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: #edf2f7;
+            color: #2d3748;
+        }
+
+        .action-btn:hover:not(:disabled) {
+            background: #e2e8f0;
+            transform: translateY(-1px);
+        }
+
+        .action-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+
+        .action-btn.action-play {
+            background: #667eea;
+            color: white;
+        }
+
+        .action-btn.action-play:hover:not(:disabled) {
+            background: #5568d3;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            padding: 16px;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            width: min(360px, 100%);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 12px;
+        }
+
+        .channel-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .channel-btn {
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #f7fafc;
+            cursor: pointer;
+            font-weight: 600;
+            color: #2d3748;
+            transition: all 0.2s ease;
+        }
+
+        .channel-btn:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+            transform: translateY(-1px);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .modal-cancel {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 6px;
+            background: #e2e8f0;
+            color: #4a5568;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .modal-cancel:hover {
+            background: #cbd5e0;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(45, 55, 72, 0.9);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            font-size: 14px;
+            z-index: 1000;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            animation: fadeInUp 0.2s ease, fadeOut 0.3s ease 2.2s forwards;
+        }
+
+        .toast-emoji {
+            font-size: 16px;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translate(-50%, 8px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        @keyframes fadeOut {
+            to { opacity: 0; transform: translate(-50%, 8px); }
+        }
     </style>
 </head>
 <body>
@@ -521,6 +657,7 @@
 
     <script>
         let autoRefreshTimer = null;
+        const AUDIO_VIDEO_FLAG = 2;
 
         // 车牌颜色映射
         const vehicleColorMap = {
@@ -536,10 +673,21 @@
             0x94: { name: '渐变绿', class: 'color-94' }
         };
 
+        function escapeAttr(value) {
+            return String(value ?? '').replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
         // 复制到剪贴板
         function copyToClipboard(text, button) {
             // 阻止事件冒泡，避免触发父元素的点击事件
-            event.stopPropagation();
+            const evt = window.event;
+            if (evt && typeof evt.stopPropagation === 'function') {
+                evt.stopPropagation();
+            }
 
             // 尝试使用现代 Clipboard API
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -621,13 +769,149 @@
             return value ? value.toFixed(6) : 'N/A';
         }
 
+        function buildPlaybackURL({ serverIP, serverPort, plate, color, channel, avFlag, authCode }) {
+            return `http://${serverIP}:${serverPort}/${plate}.${color}.${channel}.${avFlag}.${authCode}`;
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `<span class="toast-emoji">✅</span><span>${message}</span>`;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 2500);
+        }
+
+        function pickChannel() {
+            return new Promise(resolve => {
+                const overlay = document.createElement('div');
+                overlay.className = 'modal-overlay';
+                overlay.innerHTML = `
+                    <div class="modal">
+                        <div class="modal-title">请选择通道</div>
+                        <div class="channel-grid">
+                            <button class="channel-btn" data-channel="1">通道 1</button>
+                            <button class="channel-btn" data-channel="2">通道 2</button>
+                            <button class="channel-btn" data-channel="3">通道 3</button>
+                            <button class="channel-btn" data-channel="4">通道 4</button>
+                        </div>
+                        <div class="modal-actions">
+                            <button class="modal-cancel">取消</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+
+                function cleanup(val) {
+                    if (overlay.parentNode) {
+                        overlay.parentNode.removeChild(overlay);
+                    }
+                    resolve(val);
+                }
+
+                overlay.querySelectorAll('.channel-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const val = Number(btn.dataset.channel);
+                        btn.textContent = `✅ 通道 ${val}`;
+                        btn.disabled = true;
+                        overlay.querySelectorAll('.channel-btn').forEach(b => {
+                            if (b !== btn) b.disabled = true;
+                        });
+                        setTimeout(() => cleanup(val), 240);
+                    });
+                });
+
+                overlay.querySelector('.modal-cancel').addEventListener('click', () => cleanup(null));
+                overlay.addEventListener('click', e => {
+                    if (e.target === overlay) {
+                        cleanup(null);
+                    }
+                });
+            });
+        }
+
+        async function handleVideoRequest(button) {
+            const userId = Number(button.dataset.userId);
+            const vehicle = button.dataset.vehicle;
+            const color = Number(button.dataset.color) || 2;
+
+            if (!vehicle) {
+                alert('缺少车牌信息，无法点播');
+                return;
+            }
+
+            const originalText = button.textContent;
+            button.textContent = '点播中...';
+            button.disabled = true;
+            try {
+                const resp = await fetch('/api/video/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        vehicle_no: vehicle,
+                        vehicle_color: color,
+                        channel_id: 0,
+                        av_item_type: 2
+                    })
+                });
+                if (!resp.ok) {
+                    const msg = await resp.text();
+                    throw new Error(msg || '点播失败');
+                }
+                button.textContent = '已点播';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }, 1200);
+            } catch (err) {
+                alert('点播失败：' + err.message);
+                button.textContent = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function handlePlay(button) {
+            const serverIP = button.dataset.serverIp;
+            const serverPort = button.dataset.serverPort;
+            const vehicle = button.dataset.vehicle;
+            const color = Number(button.dataset.color) || 2;
+            const authCode = button.dataset.auth;
+
+            if (!serverIP || !serverPort || !vehicle || !authCode) {
+                alert('缺少视频地址或时效口令，请先完成点播并等待视频地址返回');
+                return;
+            }
+
+            const channel = await pickChannel();
+            if (channel === null) {
+                return;
+            }
+
+            const url = buildPlaybackURL({
+                serverIP,
+                serverPort,
+                plate: vehicle,
+                color,
+                channel,
+                avFlag: AUDIO_VIDEO_FLAG,
+                authCode
+            });
+            copyToClipboard(url, button);
+            showToast(`通道 ${channel} 播放地址已复制`);
+        }
+
         // 获取车牌颜色信息
         function getVehicleColor(color) {
             return vehicleColorMap[color] || { name: '未知', class: 'color-4' };
         }
 
         // 渲染车辆表格
-        function renderVehicles(vehicles) {
+        function renderVehicles(platform) {
+            const vehicles = platform?.vehicles || [];
             if (!vehicles || vehicles.length === 0) {
                 return '<div class="empty-state"><div class="empty-state-icon">📭</div><div>暂无车辆数据</div></div>';
             }
@@ -662,6 +946,7 @@
                             <th>颜色</th>
                             <th>位置</th>
                             <th>定位时间</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -674,6 +959,15 @@
                     : 'N/A';
 
                 const vehicleNo = vehicle.vehicle_no || 'N/A';
+                const hasPlate = vehicleNo !== 'N/A';
+                const videoAck = vehicle.video_ack || {};
+                const serverIP = videoAck.server_ip || videoAck.ServerIP || '';
+                const serverPort = videoAck.server_port || videoAck.ServerPort || '';
+                const hasVideoAddress = !!(serverIP && serverPort);
+                const canPlay = hasVideoAddress && platform.auth_code && hasPlate;
+                const playDisabled = canPlay ? '' : 'disabled';
+                const requestDisabled = hasPlate ? '' : 'disabled';
+
                 html += `
                     <tr>
                         <td>
@@ -685,6 +979,34 @@
                         <td><span class="vehicle-color ${colorInfo.class}">${colorInfo.name}</span></td>
                         <td class="coord">${location}</td>
                         <td class="time">${formatTime(vehicle.location_time)}</td>
+                        <td>
+                            <div class="action-cell">
+                                <button
+                                    class="action-btn"
+                                    data-user-id="${platform.user_id}"
+                                    data-vehicle="${escapeAttr(vehicleNo)}"
+                                    data-color="${vehicle.vehicle_color}"
+                                    onclick="handleVideoRequest(this)"
+                                    ${requestDisabled}
+                                >
+                                    点播
+                                </button>
+                                <button
+                                    class="action-btn action-play"
+                                    data-user-id="${platform.user_id}"
+                                    data-vehicle="${escapeAttr(vehicleNo)}"
+                                    data-color="${vehicle.vehicle_color}"
+                                    data-auth="${escapeAttr(platform.auth_code || '')}"
+                                    data-server-ip="${escapeAttr(serverIP)}"
+                                    data-server-port="${serverPort}"
+                                    onclick="handlePlay(this)"
+                                    ${playDisabled}
+                                    title="${canPlay ? '选择通道并复制播放地址' : '点播成功并返回视频地址后可用'}"
+                                >
+                                    播放
+                                </button>
+                            </div>
+                        </td>
                     </tr>
                 `;
             });
@@ -762,7 +1084,7 @@
 
                     <div class="vehicles-section">
                         <div class="vehicles-container">
-                            ${renderVehicles(platform.vehicles)}
+                            ${renderVehicles(platform)}
                         </div>
                     </div>
                 </div>
@@ -786,7 +1108,7 @@
                     expandedPlatforms.add(card.dataset.platformId);
                 });
 
-                const response = await fetch('/api/platforms');
+                const response = await fetch(`/api/platforms?ts=${Date.now()}`, { cache: 'no-store' });
                 if (!response.ok) {
                     throw new Error('Failed to fetch data');
                 }
