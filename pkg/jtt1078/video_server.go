@@ -3,6 +3,7 @@ package jtt1078
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 )
 
@@ -16,16 +17,16 @@ var (
 
 // Server represents the RTP proxy server
 type Server struct {
-	port    string
+	addr    string
 	manager *StreamManager
 }
 
 // ================= Server Instance =================
 
 // NewVideoServer creates a new server instance
-func NewVideoServer(port string) *Server {
+func NewVideoServer(addr string) *Server {
 	return &Server{
-		port:    port,
+		addr:    addr,
 		manager: &StreamManager{},
 	}
 }
@@ -41,11 +42,22 @@ func (s *Server) Start() error {
 	fmt.Println("===================================================")
 	fmt.Println("🚀 JT/T 1078-2016 RTP 代理服务器")
 	fmt.Println("✨ 功能: 视频秒开 | 多路复用 | 延迟自动修复 | 全链路日志")
-	fmt.Printf("💡 裸流: http://localhost%s/proxy?url=[JT/T 1078-2016 协议视频源地址]\n", s.port)
-	fmt.Printf("💡 FLV: http://localhost%s/proxy.flv?url=[JT/T 1078-2016 协议视频源地址]\n", s.port)
+
+	// 判断地址是否包含主机信息
+	displayAddr := s.addr
+	if s.addr != "" {
+		if h, _, err := net.SplitHostPort(s.addr); err == nil && h == "" {
+			// 只有端口号，如":8080"
+			displayAddr = "localhost" + s.addr
+		}
+		// 如果有主机名或者是无效格式，则直接使用s.addr
+	}
+
+	fmt.Printf("💡 裸流: http://%s/proxy?url=[JT/T 1078-2016 协议视频源地址]\n", displayAddr)
+	fmt.Printf("💡 FLV: http://%s/proxy.flv?url=[JT/T 1078-2016 协议视频源地址]\n", displayAddr)
 	fmt.Println("===================================================")
 
-	return http.ListenAndServe(s.port, nil)
+	return http.ListenAndServe(s.addr, nil)
 }
 
 // ================= HTTP Handlers =================

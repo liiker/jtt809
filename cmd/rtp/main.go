@@ -11,13 +11,13 @@ import (
 	"github.com/zboyco/jtt809/pkg/jtt1078"
 )
 
-var port = flag.String("port", ":8080", "监听端口")
+var addr = flag.String("addr", ":8080", "监听地址")
 
 func main() {
 	flag.Parse()
 
 	// 创建视频转码服务器实例
-	s := jtt1078.NewVideoServer(*port)
+	s := jtt1078.NewVideoServer(*addr)
 
 	// 设置信号处理，优雅关闭
 	sigChan := make(chan os.Signal, 1)
