@@ -22,17 +22,6 @@ type VideoRequest struct {
 	GnssHex      string            `json:"gnss_hex,omitempty"`
 }
 
-// VideoStreamInfo 聚合拼接视频直播流所需的关键信息。
-type VideoStreamInfo struct {
-	ServerIP     string            `json:"server_ip"`
-	ServerPort   uint16            `json:"server_port"`
-	VehicleNo    string            `json:"vehicle_no"`
-	VehicleColor jtt809.PlateColor `json:"vehicle_color"`
-	AuthorizeCode string           `json:"authorize_code"`
-	PlatformID   string            `json:"platform_id,omitempty"`
-	Result       byte              `json:"result"`
-}
-
 // RequestVideoStreamByPlate 仅通过车牌与颜色发起实时视频请求。
 // 内部自动查找车辆归属的平台，复用 RequestVideoStream 的发送逻辑。
 func (g *JT809Gateway) RequestVideoStreamByPlate(plate string, color jtt809.PlateColor, channelID byte, avItemType byte, gnssHex string) error {
@@ -50,27 +39,36 @@ func (g *JT809Gateway) RequestVideoStreamByPlate(plate string, color jtt809.Plat
 	})
 }
 
-// VideoStreamInfoByPlate 返回拼装视频直播流所需的服务器、车牌与时效口令信息。
-func (g *JT809Gateway) VideoStreamInfoByPlate(plate string, color jtt809.PlateColor) (VideoStreamInfo, error) {
+// VideoStreamUrlByPlate 通过车牌与颜色返回 jtt1078 RTP 拉流地址。
+// URL 形如 http://${serverIP}:${serverPort}/${plate}.${color}.${channel}.${avFlag}.${authCode}
+// channel: 通道号
+// avFlag: 0: 音视频; 1: 只音频; 2: 只视频
+func (g *JT809Gateway) VideoStreamUrlByPlate(plate string, color jtt809.PlateColor, channelID int, avFlag int) (string, error) {
 	snap, vehicle, err := g.findVehicleSnapshot(plate, color)
 	if err != nil {
-		return VideoStreamInfo{}, err
-	}
-	if vehicle.LastVideoAck == nil {
-		return VideoStreamInfo{}, fmt.Errorf("vehicle %s (color %d) has no video response yet", plate, vehicle.VehicleColor)
+		return "", err
 	}
 	if snap.AuthCode == "" {
-		return VideoStreamInfo{}, fmt.Errorf("authorize_code not available for platform %d", snap.UserID)
+		return "", fmt.Errorf("authorize_code not available for platform %d", snap.UserID)
 	}
-	return VideoStreamInfo{
-		ServerIP:      vehicle.LastVideoAck.ServerIP,
-		ServerPort:    vehicle.LastVideoAck.ServerPort,
-		VehicleNo:     vehicle.VehicleNo,
-		VehicleColor:  vehicle.VehicleColor,
-		AuthorizeCode: snap.AuthCode,
-		PlatformID:    snap.PlatformID,
-		Result:        vehicle.LastVideoAck.Result,
-	}, nil
+	if vehicle.LastVideoAck == nil {
+		return "", fmt.Errorf("vehicle %s (color %d) has no video response yet", plate, vehicle.VehicleColor)
+	}
+	if vehicle.LastVideoAck.Result != 0 {
+		return "", fmt.Errorf("video request for %s (color %d) not accepted, result=%d", plate, color, vehicle.LastVideoAck.Result)
+	}
+	if vehicle.LastVideoAck.ServerIP == "" || vehicle.LastVideoAck.ServerPort == 0 {
+		return "", fmt.Errorf("video server address missing for %s (color %d)", plate, color)
+	}
+	return fmt.Sprintf("http://%s:%d/%s.%d.%d.%d.%s",
+		vehicle.LastVideoAck.ServerIP,
+		vehicle.LastVideoAck.ServerPort,
+		vehicle.VehicleNo,
+		vehicle.VehicleColor,
+		channelID,
+		avFlag,
+		snap.AuthCode,
+	), nil
 }
 
 // RequestVideoStream 通过从链路向下级平台发送实时视频请求（0x9801 下行实时音视频）。
