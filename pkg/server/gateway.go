@@ -268,7 +268,7 @@ func (g *JT809Gateway) handleBusinessMessage(userID uint32, frame *jtt809.Frame,
 	case jtt809.MsgIDAuthorize:
 		g.handleAuthorize(userID, frame)
 	case jtt809.MsgIDAlarmInteract:
-		g.handleAlarmInteract(nil, frame)
+		g.handleAlarmInteract(userID, frame)
 	case jtt809.MsgIDDownHeartbeatResponse:
 		g.store.RecordHeartbeat(userID, false)
 	default:
@@ -758,12 +758,58 @@ func (g *JT809Gateway) handlePlatformInfo(userID uint32, frame *jtt809.Frame) {
 	slog.Debug("unhandled platform info sub", "user_id", userID, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
 }
 
-func (g *JT809Gateway) handleAlarmInteract(session *goserver.AppSession, frame *jtt809.Frame) {
-	sessionID := ""
-	if session != nil {
-		sessionID = session.ID
+func (g *JT809Gateway) handleAlarmInteract(userID uint32, frame *jtt809.Frame) {
+	pkt, err := jtt809.ParseAlarmInfo(frame.RawBody)
+	if err != nil {
+		slog.Warn("parse alarm interact failed", "user_id", userID, "err", err)
+		return
 	}
-	slog.Debug("ignored alarm interact message", "session", sessionID, "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
+	switch pkt.SubBusinessID {
+	case jtt809.SubMsgWarnMsgAdptInfo:
+		info, err := jtt809.ParseWarnMsgAdptInfo(pkt.Payload)
+		if err != nil {
+			slog.Warn("parse warn msg adpt info failed", "user_id", userID, "err", err, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
+			return
+		}
+		slog.Info("warn msg adpt info received",
+			"user_id", userID,
+			"src_platform", info.SourcePlatformID,
+			"warn_type", fmt.Sprintf("0x%04X", info.WarnType),
+			"warn_time", info.WarnTime,
+			"start_time", info.StartTime,
+			"end_time", info.EndTime,
+			"vehicle", info.VehicleNo,
+			"vehicle_color", info.VehicleColor,
+			"dst_platform", info.TargetPlatformID,
+			"drv_line_id", info.DrvLineID,
+			"info_length", info.InfoLength)
+		if g.callbacks != nil && g.callbacks.OnWarnMsgAdptInfo != nil {
+			go g.callbacks.OnWarnMsgAdptInfo(userID, info)
+		}
+	case jtt809.SubMsgWarnMsgInformTips:
+		info, err := jtt809.ParseWarnMsgInformTips(pkt.Payload)
+		if err != nil {
+			slog.Warn("parse warn msg inform tips failed", "user_id", userID, "err", err, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
+			return
+		}
+		slog.Info("warn msg inform tips received",
+			"user_id", userID,
+			"src_platform", info.SourcePlatformID,
+			"warn_type", fmt.Sprintf("0x%04X", info.WarnType),
+			"warn_time", info.WarnTime,
+			"start_time", info.StartTime,
+			"end_time", info.EndTime,
+			"vehicle", info.VehicleNo,
+			"vehicle_color", info.VehicleColor,
+			"dst_platform", info.TargetPlatformID,
+			"drv_line_id", info.DrvLineID,
+			"warn_length", info.WarnLength)
+		if g.callbacks != nil && g.callbacks.OnWarnMsgInformTips != nil {
+			go g.callbacks.OnWarnMsgInformTips(userID, info)
+		}
+	default:
+		slog.Debug("unhandled alarm interact sub business", "user_id", userID, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
+	}
 }
 
 func (g *JT809Gateway) handleDisconnectInform(session *goserver.AppSession, frame *jtt809.Frame) {

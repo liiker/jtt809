@@ -4,12 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/zboyco/jtt809/pkg/jtt1078"
 	"github.com/zboyco/jtt809/pkg/jtt809"
 	"github.com/zboyco/jtt809/pkg/server"
 )
@@ -104,10 +106,19 @@ func main() {
 				"plate", plate,
 				"color", color)
 		},
+		OnWarnMsgAdptInfo: func(userID uint32, info *jtt809.WarnMsgAdptInfo) {
+			slog.Info("【业务回调】报警信息适配",
+				"user_id", userID,
+				"type", info.WarnType,
+				"info", info.InfoContent)
+		},
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// 启动视频转码服务器
+	go rtpServer(ctx)
 
 	if err := gateway.Start(ctx); err != nil && err != context.Canceled {
 		slog.Error("gateway stopped with error", "err", err)
@@ -147,4 +158,23 @@ func parseConfig() (server.Config, error) {
 	}
 	cfg.Accounts = accountFS
 	return cfg, nil
+}
+
+func rtpServer(ctx context.Context) {
+	addr := flag.String("rtp", ":18081", "监听地址")
+	flag.Parse()
+
+	// 创建视频转码服务器实例
+	s := jtt1078.NewVideoServer(*addr)
+
+	// 启动服务器（阻塞）
+	go func() {
+		if err := s.Start(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	// 等待退出信号
+	<-ctx.Done()
+	fmt.Println("\n🛑 收到退出信号，正在关闭服务器...")
 }

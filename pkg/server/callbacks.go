@@ -38,4 +38,12 @@ type Callbacks struct {
 	// OnMonitorEndAck 结束车辆定位信息交换应答回调
 	// 参数: userID - 用户ID, plate - 车牌号, color - 车牌颜色
 	OnMonitorEndAck func(userID uint32, plate string, color jtt809.PlateColor)
+
+	// OnWarnMsgAdptInfo 报警信息上报回调（0x1400 子业务 0x1402）
+	// 参数: userID - 用户ID, info - 上报报警信息
+	OnWarnMsgAdptInfo func(userID uint32, info *jtt809.WarnMsgAdptInfo)
+
+	// OnWarnMsgInformTips 报警预警消息回调（0x1400 子业务 0x1403）
+	// 参数: userID - 用户ID, info - 报警预警信息
+	OnWarnMsgInformTips func(userID uint32, info *jtt809.WarnMsgInformTips)
 }

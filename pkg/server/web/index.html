@@ -770,7 +770,7 @@
         }
 
         function buildPlaybackURL({ serverIP, serverPort, plate, color, channel, avFlag, authCode }) {
-            return `http://${serverIP}:${serverPort}/${plate}.${color}.${channel}.${avFlag}.${authCode}`;
+            return `https://edgeone.ai/zh/tools/flv-player?videoUrl=http://10.100.4.8:18081/proxy.flv?url=http://${serverIP}:${serverPort}/${plate}.${color}.${channel}.${avFlag}.${authCode}`;
         }
 
         function showToast(message) {
@@ -900,8 +900,11 @@
                 avFlag: AUDIO_VIDEO_FLAG,
                 authCode
             });
-            copyToClipboard(url, button);
-            showToast(`通道 ${channel} 播放地址已复制`);
+
+            // 新标签页打开
+            window.open(url, '_blank');
+            // copyToClipboard(url, button);
+            // showToast(`通道 ${channel} 播放地址已复制`);
         }
 
         // 获取车牌颜色信息

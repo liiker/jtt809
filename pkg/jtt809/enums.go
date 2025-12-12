@@ -19,11 +19,13 @@ const (
 
 // SubBusinessType 定义子业务数据类型，截取常用值以支持定位、查岗等业务。
 const (
+	SubMsgUploadVehicleReg uint16 = 0x1201 // 上传车辆注册信息
 	SubMsgRealLocation     uint16 = 0x1202 // 实时上传车辆定位信息
 	SubMsgBatchLocation    uint16 = 0x1203 // 车辆定位信息自动补报
-	SubMsgUploadVehicleReg uint16 = 0x1201 // 上传车辆注册信息
 	SubMsgWarnSuperviseReq uint16 = 0x9401 // 报警督办请求
 	SubMsgPlatformQueryAck uint16 = 0x1301 // 平台查岗应答
+	SubMsgWarnMsgAdptInfo  uint16 = 0x1402 // 上报报警信息消息
+	SubMsgWarnMsgInformTips uint16 = 0x1403 // 上报报警预警消息
 
 	// 下行子业务 (上级平台->下级平台)
 	SubMsgApplyForMonitorStartup uint16 = 0x9205 // 启动车辆定位信息交换请求
@@ -59,19 +61,40 @@ const (
 	WarnSrcOther      WarnSrc = 0x09
 )
 
-// WarnType 表示报警类型，列举常见值。
+// WarnType 表示报警类型，结合表 3（位置相关）与表 4（非位置相关）常用编码。
 type WarnType uint16
 
 const (
-	WarnTypeOverspeed              WarnType = 0x0001
-	WarnTypeFatigueDriving         WarnType = 0x0002
-	WarnTypeEmergency              WarnType = 0x0003
-	WarnTypeEnterRegion            WarnType = 0x0004
-	WarnTypeLeaveRegion            WarnType = 0x0005
-	WarnTypeRouteDeviation         WarnType = 0x000B
-	WarnTypeOther                  WarnType = 0x000E
-	WarnTypeTimeoutParking         WarnType = 0xA001
-	WarnTypeUploadIntervalAbnormal WarnType = 0xA002
+	WarnTypeOverspeed              WarnType = 0x0001 // 超速报警
+	WarnTypeFatigueDriving         WarnType = 0x0002 // 疲劳驾驶报警
+	WarnTypeEmergency              WarnType = 0x0003 // 紧急报警
+	WarnTypeEnterRegion            WarnType = 0x0004 // 进入指定区域报警
+	WarnTypeLeaveRegion            WarnType = 0x0005 // 离开指定区域报警
+	WarnTypeAcrossBoundary         WarnType = 0x0008 // 越界报警
+	WarnTypeTheft                  WarnType = 0x0009 // 盗警
+	WarnTypeHijack                 WarnType = 0x000A // 劫警
+	WarnTypeRouteDeviation         WarnType = 0x000B // 偏离路线报警
+	WarnTypeVehicleMove            WarnType = 0x000C // 车辆移动报警
+	WarnTypeOvertimeDriving        WarnType = 0x000D // 超时驾驶报警
+	WarnTypeViolationDriving       WarnType = 0x0010 // 违规行驶报警
+	WarnTypeForwardCollision       WarnType = 0x0011 // 前撞报警
+	WarnTypeLaneDeparture          WarnType = 0x0012 // 车道偏离报警
+	WarnTypeTirePressureAbnormal   WarnType = 0x0013 // 胎压异常报警
+	WarnTypeDynamicInfoAbnormal    WarnType = 0x0014 // 动态信息异常报警
+	WarnTypeOther                  WarnType = 0x00FF // 其他报警
+	WarnTypeTimeoutParking         WarnType = 0xA001 // 超时停车
+	WarnTypeUploadIntervalAbnormal WarnType = 0xA002 // 车辆定位信息上报时间间隔异常
+	WarnTypeUploadMileageAbnormal  WarnType = 0xA003 // 车辆定位信息上报里程间隔异常
+	WarnTypeSubPlatformFreqAbn     WarnType = 0xA004 // 下级平台频率异常/断开
+	WarnTypeSubPlatformTransmitAbn WarnType = 0xA005 // 下级平台数据传输异常
+	WarnTypeRoadCongestion         WarnType = 0xA006 // 路段堵塞报警
+	WarnTypeDangerousRoad          WarnType = 0xA007 // 危险路段报警
+	WarnTypeBadWeather             WarnType = 0xA008 // 雨雪天气报警
+	WarnTypeDriverIdAbnormal       WarnType = 0xA009 // 驾驶员身份识别异常
+	WarnTypeTerminalAbnormal       WarnType = 0xA00A // 终端异常（含线路连接异常）
+	WarnTypePlatformAccessAbn      WarnType = 0xA00B // 平台接入异常
+	WarnTypeCoreDataAbnormal       WarnType = 0xA00C // 核心数据异常
+	WarnTypeOtherNonLocation       WarnType = 0xA0FF // 其他报警
 )
 
 // SupervisionLevel 表示督办级别。
