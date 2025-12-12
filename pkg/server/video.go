@@ -12,6 +12,13 @@ import (
 	"github.com/zboyco/jtt809/pkg/jtt809/jt1078"
 )
 
+var (
+	ErrAuthCodeNotAvailable = errors.New("下级平台未返回授权码")
+	ErrNoVideoResponse      = errors.New("下级平台未返回实时视频应答")
+	ErrVideoNotAccepted     = errors.New("下级平台拒绝实时视频请求")
+	ErrVideoServerMissing   = errors.New("下级平台未返回实时视频服务地址")
+)
+
 // VideoRequest 表示向下级平台下发的实时音视频请求。
 type VideoRequest struct {
 	UserID       uint32            `json:"user_id"`
@@ -49,16 +56,16 @@ func (g *JT809Gateway) VideoStreamUrlByPlate(plate string, color jtt809.PlateCol
 		return "", err
 	}
 	if snap.AuthCode == "" {
-		return "", fmt.Errorf("authorize_code not available for platform %d", snap.UserID)
+		return "", ErrAuthCodeNotAvailable
 	}
 	if vehicle.LastVideoAck == nil {
-		return "", fmt.Errorf("vehicle %s (color %d) has no video response yet", plate, vehicle.VehicleColor)
+		return "", ErrNoVideoResponse
 	}
 	if vehicle.LastVideoAck.Result != 0 {
-		return "", fmt.Errorf("video request for %s (color %d) not accepted, result=%d", plate, color, vehicle.LastVideoAck.Result)
+		return "", ErrVideoNotAccepted
 	}
 	if vehicle.LastVideoAck.ServerIP == "" || vehicle.LastVideoAck.ServerPort == 0 {
-		return "", fmt.Errorf("video server address missing for %s (color %d)", plate, color)
+		return "", ErrVideoServerMissing
 	}
 	return fmt.Sprintf("http://%s:%d/%s.%d.%d.%d.%s",
 		vehicle.LastVideoAck.ServerIP,
