@@ -48,8 +48,8 @@ func (s *Server) Start() error {
 	// Enable detailed logging: date time microseconds
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
-	http.HandleFunc("/proxy", s.handleProxyRaw)
-	http.HandleFunc("/proxy.flv", s.handleProxyFLV)
+	http.HandleFunc("/rtp-proxy/raw", s.HandleProxyRaw)
+	http.HandleFunc("/rtp-proxy/flv", s.HandleProxyFLV)
 
 	fmt.Println("===================================================")
 	fmt.Println("🚀 JT/T 1078-2016 RTP 代理服务器")
@@ -65,8 +65,8 @@ func (s *Server) Start() error {
 		// 如果有主机名或者是无效格式，则直接使用s.addr
 	}
 
-	fmt.Printf("💡 裸流: http://%s/proxy?xxx=yyy\n", displayAddr)
-	fmt.Printf("💡 FLV: http://%s/proxy.flv?xxx=yyy\n", displayAddr)
+	fmt.Printf("💡 裸流: http://%s/rtp-proxy/raw?xxx=yyy\n", displayAddr)
+	fmt.Printf("💡 FLV: http://%s/rtp-proxy/flv?xxx=yyy\n", displayAddr)
 	fmt.Println("===================================================")
 
 	return http.ListenAndServe(s.addr, nil)
@@ -74,7 +74,7 @@ func (s *Server) Start() error {
 
 // ================= HTTP Handlers =================
 
-func (s *Server) handleProxyRaw(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleProxyRaw(w http.ResponseWriter, r *http.Request) {
 	targetURL, clientIP := s.parseRequest(r)
 	if targetURL == "" {
 		http.Error(w, "missing url", 400)
@@ -92,7 +92,7 @@ func (s *Server) handleProxyRaw(w http.ResponseWriter, r *http.Request) {
 	s.runStreamLoop(w, flusher, targetURL, clientIP, false)
 }
 
-func (s *Server) handleProxyFLV(w http.ResponseWriter, r *http.Request) {
+func (s *Server) HandleProxyFLV(w http.ResponseWriter, r *http.Request) {
 	targetURL, clientIP := s.parseRequest(r)
 	if targetURL == "" {
 		http.Error(w, "missing url", 400)

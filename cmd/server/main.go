@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -25,7 +24,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(logger)
 
-	gateway, err := server.NewJT809Gateway(cfg)
+	gateway, err := server.NewJT809Gateway(cfg, jtt1078.NewVideoServer(""))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "init gateway: %v\n", err)
 		os.Exit(2)
@@ -117,9 +116,6 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// 启动视频转码服务器
-	go rtpServer(ctx)
-
 	if err := gateway.Start(ctx); err != nil && err != context.Canceled {
 		slog.Error("gateway stopped with error", "err", err)
 	}
@@ -158,23 +154,4 @@ func parseConfig() (server.Config, error) {
 	}
 	cfg.Accounts = accountFS
 	return cfg, nil
-}
-
-func rtpServer(ctx context.Context) {
-	addr := flag.String("rtp", ":18081", "监听地址")
-	flag.Parse()
-
-	// 创建视频转码服务器实例
-	s := jtt1078.NewVideoServer(*addr)
-
-	// 启动服务器（阻塞）
-	go func() {
-		if err := s.Start(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
-	// 等待退出信号
-	<-ctx.Done()
-	fmt.Println("\n🛑 收到退出信号，正在关闭服务器...")
 }

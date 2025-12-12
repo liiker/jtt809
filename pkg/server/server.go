@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func printStartupInfo(cfg Config) {
+func printStartupInfo(cfg Config, withRtp bool) {
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("  JT/T 809-2019 上级平台服务器")
 	fmt.Println(strings.Repeat("=", 80))
@@ -48,9 +48,14 @@ func printStartupInfo(cfg Config) {
 	if cfg.HTTPListen != "" {
 		fmt.Println("\n🌐 HTTP管理接口:")
 		fmt.Printf("  ├─ 监控系统:     GET  http://%s/ui\n", cfg.HTTPListen)
-		fmt.Printf("  ├─ 健康检查:     GET  http://%s/healthz\n", cfg.HTTPListen)
 		fmt.Printf("  ├─ 平台状态:     GET  http://%s/api/platforms\n", cfg.HTTPListen)
-		fmt.Printf("  └─ 请求视频流:   POST http://%s/api/video/request\n", cfg.HTTPListen)
+		fmt.Printf("  ├─ 请求视频流:   POST http://%s/api/video/request\n", cfg.HTTPListen)
+		if withRtp {
+			fmt.Printf("  ├─ 裸流代理:     GET  http://%s/proxy/rtp.raw\n", cfg.HTTPListen)
+			fmt.Printf("  ├─ FLV代理:      GET  http://%s/proxy/rtp.flv\n", cfg.HTTPListen)
+		}
+
+		fmt.Printf("  └─ 健康检查:     GET  http://%s/healthz\n", cfg.HTTPListen)
 	}
 
 	fmt.Println("\n" + strings.Repeat("=", 80))

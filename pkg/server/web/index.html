@@ -658,6 +658,7 @@
     <script>
         let autoRefreshTimer = null;
         const AUDIO_VIDEO_FLAG = 2;
+        const currentOrigin = `${window.location.protocol}//${window.location.host}`;
 
         // 车牌颜色映射
         const vehicleColorMap = {
@@ -770,7 +771,7 @@
         }
 
         function buildPlaybackURL({ serverIP, serverPort, plate, color, channel, avFlag, authCode }) {
-            return `https://edgeone.ai/zh/tools/flv-player?videoUrl=http://10.100.4.8:18081/proxy.flv?url=http://${serverIP}:${serverPort}/${plate}.${color}.${channel}.${avFlag}.${authCode}`;
+            return `https://edgeone.ai/zh/tools/flv-player?videoUrl=${currentOrigin}/proxy/rtp.flv?url=http://${serverIP}:${serverPort}/${plate}.${color}.${channel}.${avFlag}.${authCode}`;
         }
 
         function showToast(message) {

@@ -14,6 +14,7 @@ import (
 
 	goserver "github.com/zboyco/go-server"
 	"github.com/zboyco/go-server/client"
+	"github.com/zboyco/jtt809/pkg/jtt1078"
 	"github.com/zboyco/jtt809/pkg/jtt809"
 	"github.com/zboyco/jtt809/pkg/jtt809/jt1078"
 )
@@ -47,23 +48,25 @@ type JT809Gateway struct {
 
 	mainSrv *goserver.Server
 	httpSrv *http.Server
+	rtpSrv  *jtt1078.Server
 
 	callbacks *Callbacks // 消息回调
 
 	startOnce sync.Once
 }
 
-func NewJT809Gateway(cfg Config) (*JT809Gateway, error) {
+func NewJT809Gateway(cfg Config, rtpServer *jtt1078.Server) (*JT809Gateway, error) {
 	if len(cfg.Accounts) == 0 {
 		return nil, errors.New("at least one account is required")
 	}
 
-	printStartupInfo(cfg)
+	printStartupInfo(cfg, rtpServer != nil)
 
 	return &JT809Gateway{
-		cfg:   cfg,
-		auth:  NewAuthenticator(cfg.Accounts),
-		store: NewPlatformStore(),
+		cfg:    cfg,
+		auth:   NewAuthenticator(cfg.Accounts),
+		store:  NewPlatformStore(),
+		rtpSrv: rtpServer,
 	}, nil
 }
 

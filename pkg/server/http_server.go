@@ -25,6 +25,10 @@ func (g *JT809Gateway) startHTTPServer(ctx context.Context) {
 	mux.HandleFunc("/healthz", g.handleHealth)
 	mux.HandleFunc("/api/platforms", g.handlePlatforms)
 	mux.HandleFunc("/api/video/request", g.handleVideoRequest)
+	if g.rtpSrv != nil {
+		mux.HandleFunc("/proxy/rtp.raw", g.rtpSrv.HandleProxyRaw)
+		mux.HandleFunc("/proxy/rtp.flv", g.rtpSrv.HandleProxyFLV)
+	}
 
 	// 嵌入的静态文件服务
 	webContent, err := fs.Sub(webFS, "web")
