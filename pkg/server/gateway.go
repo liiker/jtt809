@@ -20,7 +20,7 @@ import (
 
 // LinkPolicy 链路策略配置
 type LinkPolicy struct {
-	PreferredLink string // "main" 或 "sub"
+	PreferredLink string // "main"、"sub" 或 "both"
 	AllowFallback bool   // 是否允许降级
 }
 
@@ -30,6 +30,7 @@ var linkPolicies = map[uint16]LinkPolicy{
 	jtt809.MsgIDDownlinkConnReq:      {PreferredLink: "sub", AllowFallback: false},  // 0x9001 从链路登录请求，不能降级
 	jtt809.MsgIDDownHeartbeatRequest: {PreferredLink: "sub", AllowFallback: false},  // 0x9005 从链路心跳请求，不能降级
 	jtt809.MsgIDDownDisconnectInform: {PreferredLink: "main", AllowFallback: false}, // 0x9007 从链路断开通知，只能主链路
+	jtt809.MsgIDHeartbeatResponse:    {PreferredLink: "both", AllowFallback: false}, // 0x1006 主链路心跳应答需主/从链路各发一次,原因是因为有些平台没按照规范处理通过从链路返回的主链路心跳应答
 }
 
 // 默认策略：从链路，允许降级
@@ -909,7 +910,33 @@ func (g *JT809Gateway) SendToSubordinate(userID uint32, header jtt809.Header, bo
 	mainActive, subActive := g.store.GetLinkStatus(userID)
 
 	// 根据策略选择链路
-	if policy.PreferredLink == "main" {
+	switch policy.PreferredLink {
+	case "both":
+		sent := false
+		var lastErr error
+		if mainActive {
+			if err := g.sendOnMainLink(userID, data); err != nil {
+				slog.Warn("send on main link failed", "user_id", userID, "msg_id", fmt.Sprintf("0x%04X", msgID), "err", err)
+				lastErr = err
+			} else {
+				sent = true
+			}
+		}
+		if subActive {
+			if err := g.sendOnSubLink(userID, data); err != nil {
+				slog.Warn("send on sub link failed", "user_id", userID, "msg_id", fmt.Sprintf("0x%04X", msgID), "err", err)
+				lastErr = err
+			} else {
+				sent = true
+			}
+		}
+		if sent {
+			return nil
+		}
+		if lastErr != nil {
+			return fmt.Errorf("send on both links failed: %w", lastErr)
+		}
+	case "main":
 		// 首选主链路
 		if mainActive {
 			if err := g.sendOnMainLink(userID, data); err == nil {
@@ -924,7 +951,7 @@ func (g *JT809Gateway) SendToSubordinate(userID uint32, header jtt809.Header, bo
 				return nil
 			}
 		}
-	} else {
+	default: // "sub"
 		// 首选从链路
 		if subActive {
 			if err := g.sendOnSubLink(userID, data); err == nil {
