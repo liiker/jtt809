@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -56,10 +55,6 @@ type JT809Gateway struct {
 }
 
 func NewJT809Gateway(cfg Config, rtpServer *jtt1078.Server) (*JT809Gateway, error) {
-	if len(cfg.Accounts) == 0 {
-		return nil, errors.New("at least one account is required")
-	}
-
 	printStartupInfo(cfg, rtpServer != nil)
 
 	return &JT809Gateway{
@@ -681,6 +676,7 @@ func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
 		count := int(pkt.Payload[0])
 		reader := pkt.Payload[1:]
 		parsed := 0
+		gnsss := make([]jtt809.GNSSData, 0, count)
 		for i := 0; i < count && len(reader) >= 5; i++ {
 			gnssLen := int(binary.BigEndian.Uint32(reader[1:5]))
 			totalLen := 1 + 4 + gnssLen + (11+4)*3
@@ -694,6 +690,7 @@ func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
 			}
 			g.store.UpdateLocation(userID, pkt.Color, pkt.Plate, &pos, count)
 			if gnss, err := jtt809.ParseGNSSData(pos.GnssData); err == nil {
+				gnsss = append(gnsss, gnss)
 				slog.Info("batch location item", "user_id", userID, "plate", pkt.Plate, "index", i, "lon", gnss.Longitude, "lat", gnss.Latitude)
 			}
 			reader = reader[totalLen:]
@@ -703,7 +700,7 @@ func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
 
 		// 触发批量定位回调
 		if g.callbacks != nil && g.callbacks.OnBatchLocation != nil {
-			go g.callbacks.OnBatchLocation(userID, pkt.Plate, pkt.Color, parsed)
+			go g.callbacks.OnBatchLocation(userID, pkt.Plate, pkt.Color, gnsss)
 		}
 	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorStartupAck:
 		ack, err := jtt809.ParseMonitorAck(pkt.Payload)

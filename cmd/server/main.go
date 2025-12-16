@@ -67,11 +67,11 @@ func main() {
 			// - 触发地理围栏判断
 			// - 更新车辆实时位置
 		},
-		OnBatchLocation: func(userID uint32, plate string, color jtt809.PlateColor, count int) {
+		OnBatchLocation: func(userID uint32, plate string, color jtt809.PlateColor, gnss []jtt809.GNSSData) {
 			slog.Info("【业务回调】批量定位",
 				"user_id", userID,
 				"plate", plate,
-				"count", count)
+				"count", len(gnss))
 			// 批量定位数据处理
 		},
 		OnVideoResponse: func(userID uint32, plate string, color jtt809.PlateColor, videoAck *server.VideoAckState) {
@@ -143,15 +143,15 @@ func parseConfig() (server.Config, error) {
 		}(),
 	}
 
-	if len(accountFS) == 0 {
-		// 默认账号，方便快速体验。
-		accountFS = append(accountFS, server.Account{
-			UserID:       10001,
-			Password:     "pass809",
-			GnssCenterID: 324469864,
-			AllowIPs:     []string{"*"},
-		})
-	}
+	// if len(accountFS) == 0 {
+	// 	// 默认账号，方便快速体验。
+	// 	accountFS = append(accountFS, server.Account{
+	// 		UserID:       10001,
+	// 		Password:     "pass809",
+	// 		GnssCenterID: 324469864,
+	// 		AllowIPs:     []string{"*"},
+	// 	})
+	// }
 	cfg.Accounts = accountFS
 	return cfg, nil
 }

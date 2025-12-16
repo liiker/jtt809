@@ -20,8 +20,8 @@ type Callbacks struct {
 	OnVehicleLocation func(userID uint32, plate string, color jtt809.PlateColor, pos *jtt809.VehiclePosition, gnss *jtt809.GNSSData)
 
 	// OnBatchLocation 车辆批量定位回调
-	// 参数: userID - 用户ID, plate - 车牌号, color - 车牌颜色, count - 批次中的定位数量
-	OnBatchLocation func(userID uint32, plate string, color jtt809.PlateColor, count int)
+	// 参数: userID - 用户ID, plate - 车牌号, color - 车牌颜色, gnsss - GNSS数据列表
+	OnBatchLocation func(userID uint32, plate string, color jtt809.PlateColor, gnss []jtt809.GNSSData)
 
 	// OnVideoResponse 实时视频应答回调
 	// 参数: userID - 用户ID, plate - 车牌号, color - 车牌颜色, videoAck - 视频应答信息
