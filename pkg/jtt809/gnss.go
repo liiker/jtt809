@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+var loc = time.FixedZone("UTC+8", 8*3600)
+
 // GNSSData 表示车辆定位基础信息（表23）及附加信息（表26/27）。
 type GNSSData struct {
 	Alarm       uint32
@@ -16,10 +18,10 @@ type GNSSData struct {
 	Speed       uint16 // 车辆速度（0.1 km/h）
 	Direction   uint16 // 0-359°
 	DateTime    GNSSTime
-	Mileage     uint32            // 附加信息 0x01，单位 0.1 km
-	Fuel        uint16            // 附加信息 0x02，单位 0.1 L
-	RecordSpeed uint16            // 附加信息 0x03，行驶记录仪速度（0.1 km/h）
-	Additional  map[byte][]byte   // 其他附加信息原始数据
+	Mileage     uint32          // 附加信息 0x01，单位 0.1 km
+	Fuel        uint16          // 附加信息 0x02，单位 0.1 L
+	RecordSpeed uint16          // 附加信息 0x03，行驶记录仪速度（0.1 km/h）
+	Additional  map[byte][]byte // 其他附加信息原始数据
 }
 
 // GNSSTime 表示 GNSS 数据内的日期时间字段。
@@ -32,11 +34,8 @@ type GNSSTime struct {
 	Second byte
 }
 
-// Time 返回 time.Time，默认使用 UTC 时区。如果字段非法则返回零值。
-func (t GNSSTime) Time(loc *time.Location) time.Time {
-	if loc == nil {
-		loc = time.UTC
-	}
+// Time 返回 time.Time，根据协议规定，使用+8时区。如果字段非法则返回零值。
+func (t GNSSTime) Time() time.Time {
 	if t.Month == 0 || t.Month > 12 || t.Day == 0 || t.Day > 31 {
 		return time.Time{}
 	}
