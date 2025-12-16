@@ -6,19 +6,20 @@ import (
 	"time"
 )
 
-// GNSSData 表示 36 字节 GNSS 数据。
+// GNSSData 表示车辆定位基础信息（表23）及附加信息（表26/27）。
 type GNSSData struct {
-	Encrypt     byte
-	DateTime    GNSSTime
-	Longitude   float64
+	Alarm       uint32
+	State       uint32
 	Latitude    float64
-	Speed       uint16 // 车辆速度（0.1 km/h）
-	RecordSpeed uint16 // 行驶记录仪速度（0.1 km/h）
-	Mileage     uint32 // 单位 0.1 km
-	Direction   uint16 // 0-359°
+	Longitude   float64
 	Altitude    uint16 // 单位 m
-	State       uint32 // 车辆状态位
-	Alarm       uint32 // 报警标志
+	Speed       uint16 // 车辆速度（0.1 km/h）
+	Direction   uint16 // 0-359°
+	DateTime    GNSSTime
+	Mileage     uint32            // 附加信息 0x01，单位 0.1 km
+	Fuel        uint16            // 附加信息 0x02，单位 0.1 L
+	RecordSpeed uint16            // 附加信息 0x03，行驶记录仪速度（0.1 km/h）
+	Additional  map[byte][]byte   // 其他附加信息原始数据
 }
 
 // GNSSTime 表示 GNSS 数据内的日期时间字段。
@@ -43,30 +44,95 @@ func (t GNSSTime) Time(loc *time.Location) time.Time {
 		int(t.Hour), int(t.Minute), int(t.Second), 0, loc)
 }
 
-// ParseGNSSData 解码 36 字节 GNSS 数据。
+func parseBCDByte(b byte) (int, error) {
+	hi := b >> 4
+	lo := b & 0x0F
+	if hi >= 10 || lo >= 10 {
+		return 0, fmt.Errorf("invalid BCD byte: 0x%02X", b)
+	}
+	return int(hi*10 + lo), nil
+}
+
+func parseBCDTime6(b []byte) (GNSSTime, error) {
+	if len(b) < 6 {
+		return GNSSTime{}, fmt.Errorf("invalid BCD time length: %d", len(b))
+	}
+	var parts [6]int
+	for i := 0; i < 6; i++ {
+		v, err := parseBCDByte(b[i])
+		if err != nil {
+			return GNSSTime{}, err
+		}
+		parts[i] = v
+	}
+	return GNSSTime{
+		Year:   uint16(2000 + parts[0]),
+		Month:  byte(parts[1]),
+		Day:    byte(parts[2]),
+		Hour:   byte(parts[3]),
+		Minute: byte(parts[4]),
+		Second: byte(parts[5]),
+	}, nil
+}
+
+// ParseGNSSData 解码车辆定位基础信息（28 字节）及附加信息 TLV。
 func ParseGNSSData(data []byte) (GNSSData, error) {
-	if len(data) < 36 {
+	const baseLen = 28
+	if len(data) < baseLen {
 		return GNSSData{}, fmt.Errorf("gnss payload too short: %d", len(data))
 	}
 	gnss := GNSSData{
-		Encrypt: data[0],
-		DateTime: GNSSTime{
-			Day:    data[1],
-			Month:  data[2],
-			Year:   binary.BigEndian.Uint16(data[3:5]),
-			Hour:   data[5],
-			Minute: data[6],
-			Second: data[7],
-		},
-		Speed:       binary.BigEndian.Uint16(data[16:18]),
-		RecordSpeed: binary.BigEndian.Uint16(data[18:20]),
-		Mileage:     binary.BigEndian.Uint32(data[20:24]),
-		Direction:   binary.BigEndian.Uint16(data[24:26]),
-		Altitude:    binary.BigEndian.Uint16(data[26:28]),
-		State:       binary.BigEndian.Uint32(data[28:32]),
-		Alarm:       binary.BigEndian.Uint32(data[32:36]),
+		Alarm:     binary.BigEndian.Uint32(data[0:4]),
+		State:     binary.BigEndian.Uint32(data[4:8]),
+		Latitude:  float64(int32(binary.BigEndian.Uint32(data[8:12]))) / 1e6,
+		Longitude: float64(int32(binary.BigEndian.Uint32(data[12:16]))) / 1e6,
+		Altitude:  binary.BigEndian.Uint16(data[16:18]),
+		Speed:     binary.BigEndian.Uint16(data[18:20]),
+		Direction: binary.BigEndian.Uint16(data[20:22]),
 	}
-	gnss.Longitude = float64(int32(binary.BigEndian.Uint32(data[8:12]))) / 1e6
-	gnss.Latitude = float64(int32(binary.BigEndian.Uint32(data[12:16]))) / 1e6
+
+	t, err := parseBCDTime6(data[22:28])
+	if err != nil {
+		return GNSSData{}, fmt.Errorf("parse gnss time: %w", err)
+	}
+	gnss.DateTime = t
+
+	if len(data) == baseLen {
+		return gnss, nil
+	}
+
+	additional := make(map[byte][]byte)
+	for idx := baseLen; idx < len(data); {
+		if idx+2 > len(data) {
+			return GNSSData{}, fmt.Errorf("gnss attachment header truncated at %d", idx)
+		}
+		id := data[idx]
+		l := int(data[idx+1])
+		idx += 2
+		if idx+l > len(data) {
+			return GNSSData{}, fmt.Errorf("gnss attachment %02X length %d exceeds payload", id, l)
+		}
+		val := append([]byte(nil), data[idx:idx+l]...)
+		idx += l
+		additional[id] = val
+
+		switch id {
+		case 0x01: // 里程
+			if l >= 4 {
+				gnss.Mileage = binary.BigEndian.Uint32(val[:4])
+			}
+		case 0x02: // 油量
+			if l >= 2 {
+				gnss.Fuel = binary.BigEndian.Uint16(val[:2])
+			}
+		case 0x03: // 行驶记录仪速度
+			if l >= 2 {
+				gnss.RecordSpeed = binary.BigEndian.Uint16(val[:2])
+			}
+		}
+	}
+	if len(additional) > 0 {
+		gnss.Additional = additional
+	}
 	return gnss, nil
 }
