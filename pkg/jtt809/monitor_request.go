@@ -13,13 +13,13 @@ type ApplyForMonitorStartup struct {
 	ReasonCode   MonitorReasonCode
 }
 
-func (ApplyForMonitorStartup) MsgID() uint16 { return MsgIDDownExgMsg }
+func (ApplyForMonitorStartup) MsgID() uint16 { return DOWN_EXG_MSG }
 
 func (a ApplyForMonitorStartup) Encode() ([]byte, error) {
 	var buf bytes.Buffer
 	buf.Write(PadRightGBK(a.VehicleNo, 21))
 	buf.WriteByte(byte(a.VehicleColor))
-	_ = binary.Write(&buf, binary.BigEndian, SubMsgApplyForMonitorStartup)
+	_ = binary.Write(&buf, binary.BigEndian, DOWN_EXG_MSG_RETURN_STARTUP)
 	_ = binary.Write(&buf, binary.BigEndian, uint32(1)) // 数据长度=1
 	buf.WriteByte(byte(a.ReasonCode))
 	return buf.Bytes(), nil
@@ -32,13 +32,13 @@ type ApplyForMonitorEnd struct {
 	ReasonCode   MonitorReasonCode
 }
 
-func (ApplyForMonitorEnd) MsgID() uint16 { return MsgIDDownExgMsg }
+func (ApplyForMonitorEnd) MsgID() uint16 { return DOWN_EXG_MSG }
 
 func (a ApplyForMonitorEnd) Encode() ([]byte, error) {
 	var buf bytes.Buffer
 	buf.Write(PadRightGBK(a.VehicleNo, 21))
 	buf.WriteByte(byte(a.VehicleColor))
-	_ = binary.Write(&buf, binary.BigEndian, SubMsgApplyForMonitorEnd)
+	_ = binary.Write(&buf, binary.BigEndian, DOWN_EXG_MSG_RETURN_END)
 	_ = binary.Write(&buf, binary.BigEndian, uint32(1)) // 数据长度=1
 	buf.WriteByte(byte(a.ReasonCode))
 	return buf.Bytes(), nil

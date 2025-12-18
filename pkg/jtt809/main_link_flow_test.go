@@ -28,7 +28,7 @@ func TestMainLinkHandleLoginRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate login response: %v", err)
 	}
-	if respPkg.Header.BusinessType != MsgIDLoginResponse {
+	if respPkg.Header.BusinessType != UP_CONNECT_RSP {
 		t.Fatalf("unexpected response msg id: %x", respPkg.Header.BusinessType)
 	}
 	resp, ok := respPkg.Body.(LoginResponse)
@@ -42,7 +42,7 @@ func TestMainLinkHandleLoginRequest(t *testing.T) {
 
 // 主动发送登录应答：根据请求头生成对应业务 ID 的应答包。
 func TestMainLinkSendLoginResponse(t *testing.T) {
-	reqHeader := Header{BusinessType: MsgIDLoginRequest, MsgSN: 10, GNSSCenterID: 1}
+	reqHeader := Header{BusinessType: UP_CONNECT_REQ, MsgSN: 10, GNSSCenterID: 1}
 	resp := LoginResponse{Result: LoginOK, VerifyCode: 0xabcdef}
 	data, err := BuildLoginResponsePackage(reqHeader, resp)
 	if err != nil {
@@ -52,7 +52,7 @@ func TestMainLinkSendLoginResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode login response frame: %v", err)
 	}
-	if frame.BodyID != MsgIDLoginResponse {
+	if frame.BodyID != UP_CONNECT_RSP {
 		t.Fatalf("unexpected body id: %x", frame.BodyID)
 	}
 	parsed, err := ParseLoginResponse(frame.RawBody)
@@ -94,7 +94,7 @@ func TestMainLinkHandleRealTimeLocation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse sub business: %v", err)
 	}
-	if sub.SubBusinessID != SubMsgRealLocation { // 复用 0x1202 标识
+	if sub.SubBusinessID != UP_EXG_MSG_REAL_LOCATION { // 复用 0x1202 标识
 		t.Fatalf("unexpected sub business id: %x", sub.SubBusinessID)
 	}
 	loc, err := ParseVehiclePosition(sub.Payload)
@@ -120,7 +120,7 @@ func TestMainLinkHeartbeatAutoResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate heartbeat response: %v", err)
 	}
-	if respPkg.Header.BusinessType != MsgIDHeartbeatResponse {
+	if respPkg.Header.BusinessType != UP_LINKTEST_RSP {
 		t.Fatalf("unexpected heartbeat response id: %x", respPkg.Header.BusinessType)
 	}
 	if _, ok := respPkg.Body.(HeartbeatResponse); !ok {

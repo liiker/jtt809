@@ -93,7 +93,7 @@ func main() {
 			continue
 		}
 		switch frame.BodyID {
-		case jtt809.MsgIDLoginResponse:
+		case jtt809.UP_CONNECT_RSP:
 			log.Println("Login Response Received")
 			if !loginSuccess {
 				loginSuccess = true
@@ -103,9 +103,9 @@ func main() {
 					go sendLocationUpdates(conn, &msgSN, time.Duration(*locationSec)*time.Second)
 				}
 			}
-		case jtt809.MsgIDHeartbeatResponse:
+		case jtt809.UP_LINKTEST_RSP:
 			log.Println("Heartbeat Response Received")
-		case jtt809.MsgIDDownRealTimeVideo:
+		case jtt809.DOWN_REALVIDEO_MSG:
 			log.Println("[Main] Received Video Request (0x9800)")
 			handleVideoRequest(conn, frame, &msgSN)
 		}
@@ -123,7 +123,7 @@ func sendMainHeartbeat(conn net.Conn, msgSN *uint32) {
 		hb, err := jtt809.EncodePackage(jtt809.Package{
 			Header: jtt809.Header{
 				MsgSN:        *msgSN,
-				BusinessType: jtt809.MsgIDHeartbeatRequest,
+				BusinessType: jtt809.UP_LINKTEST_REQ,
 				Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
 			},
 			Body: jtt809.HeartbeatRequest{},
@@ -168,7 +168,7 @@ func handleSubLink(conn net.Conn) {
 			continue
 		}
 		switch frame.BodyID {
-		case jtt809.MsgIDDownlinkConnReq:
+		case jtt809.DOWN_CONNECT_REQ:
 			log.Println("Sub Link Login Request Received")
 			// Send Response
 			resp := jtt809.SubLinkLoginResponse{Result: 0}
@@ -186,7 +186,7 @@ func handleSubLink(conn net.Conn) {
 				Body:   jtt809.SubLinkHeartbeatResponse{},
 			})
 			conn.Write(pkg)
-		case jtt809.MsgIDDownExgMsg:
+		case jtt809.DOWN_EXG_MSG:
 			log.Println("[Sub] Received DOWN_EXG_MSG (0x9200)")
 			handleMonitorRequest(conn, frame)
 		}
@@ -372,14 +372,14 @@ func sendAuthorizeReport(conn net.Conn, msgSN *uint32) {
 
 	// 封装为 0x1700 消息体
 	msg := jt1078.AuthorizeMsg{
-		SubBusinessID: jtt809.SubMsgAuthorizeStartupReq, // 0x1701
+		SubBusinessID: jtt809.UP_AUTHORIZE_MSG_STARTUP, // 0x1701
 		Payload:       payload,
 	}
 
 	pkg, err := jtt809.EncodePackage(jtt809.Package{
 		Header: jtt809.Header{
 			MsgSN:        *msgSN,
-			BusinessType: jtt809.MsgIDAuthorize, // 0x1700
+			BusinessType: jtt809.UP_AUTHORIZE_MSG, // 0x1700
 			Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
 		},
 		Body: msg,
@@ -413,7 +413,7 @@ func sendVehicleRegistration(conn net.Conn, msgSN *uint32) {
 	pkg, err := jtt809.EncodePackage(jtt809.Package{
 		Header: jtt809.Header{
 			MsgSN:        *msgSN,
-			BusinessType: jtt809.MsgIDDynamicInfo,
+			BusinessType: jtt809.UP_EXG_MSG,
 			Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
 		},
 		Body: reg,
@@ -440,7 +440,7 @@ func handleVideoRequest(conn net.Conn, frame *jtt809.Frame, msgSN *uint32) {
 	}
 
 	// 验证子业务ID
-	if subPkt.SubBusinessID != jtt809.SubMsgDownRealTimeVideoStartupReq {
+	if subPkt.SubBusinessID != jtt809.DOWN_REALVIDEO_MSG_STARTUP {
 		log.Printf("[Main] Unexpected sub business ID: 0x%04X, expected 0x9801", subPkt.SubBusinessID)
 		return
 	}
@@ -469,7 +469,7 @@ func handleVideoRequest(conn net.Conn, frame *jtt809.Frame, msgSN *uint32) {
 	}
 
 	// 构建子业务消息体
-	subBody, err := buildSubBusinessBody(subPkt.Plate, subPkt.Color, jtt809.SubMsgRealTimeVideoStartupAck, ackPayload)
+	subBody, err := buildSubBusinessBody(subPkt.Plate, subPkt.Color, jtt809.UP_REALVIDEO_MSG_STARTUP_ACK, ackPayload)
 	if err != nil {
 		log.Printf("[Main] Build sub business body failed: %v", err)
 		return
@@ -479,12 +479,12 @@ func handleVideoRequest(conn net.Conn, frame *jtt809.Frame, msgSN *uint32) {
 	pkg, err := jtt809.EncodePackage(jtt809.Package{
 		Header: jtt809.Header{
 			MsgSN:        *msgSN,
-			BusinessType: jtt809.MsgIDRealTimeVideo,
+			BusinessType: jtt809.UP_REALVIDEO_MSG,
 			GNSSCenterID: frame.Header.GNSSCenterID,
 			Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
 		},
 		Body: rawBody{
-			msgID:   jtt809.MsgIDRealTimeVideo,
+			msgID:   jtt809.UP_REALVIDEO_MSG,
 			payload: subBody,
 		},
 	})
@@ -547,12 +547,12 @@ func handleMonitorRequest(conn net.Conn, frame *jtt809.Frame) {
 	var ackSubID uint16
 	var action string
 	switch subPkt.SubBusinessID {
-	case jtt809.SubMsgApplyForMonitorStartup:
-		ackSubID = jtt809.SubMsgApplyForMonitorStartupAck
+	case jtt809.DOWN_EXG_MSG_RETURN_STARTUP:
+		ackSubID = jtt809.UP_EXG_MSG_RETURN_STARTUP_ACK
 		action = "startup"
 		startGPSReporting(conn)
-	case jtt809.SubMsgApplyForMonitorEnd:
-		ackSubID = jtt809.SubMsgApplyForMonitorEndAck
+	case jtt809.DOWN_EXG_MSG_RETURN_END:
+		ackSubID = jtt809.UP_EXG_MSG_RETURN_END_ACK
 		action = "end"
 		stopGPSReporting()
 	default:
@@ -568,12 +568,12 @@ func handleMonitorRequest(conn net.Conn, frame *jtt809.Frame) {
 	pkg, _ := jtt809.EncodePackage(jtt809.Package{
 		Header: jtt809.Header{
 			MsgSN:        frame.Header.MsgSN + 1,
-			BusinessType: jtt809.MsgIDDynamicInfo,
+			BusinessType: jtt809.UP_EXG_MSG,
 			GNSSCenterID: frame.Header.GNSSCenterID,
 			Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
 		},
 		Body: rawBody{
-			msgID:   jtt809.MsgIDDynamicInfo,
+			msgID:   jtt809.UP_EXG_MSG,
 			payload: ackBody,
 		},
 	})
@@ -632,7 +632,7 @@ func sendGPSLocation(gps *GPSSimulator) {
 	pkg, _ := jtt809.EncodePackage(jtt809.Package{
 		Header: jtt809.Header{
 			MsgSN:        *mainMsgSN,
-			BusinessType: jtt809.MsgIDDynamicInfo,
+			BusinessType: jtt809.UP_EXG_MSG,
 			Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
 		},
 		Body: upload,
@@ -663,7 +663,7 @@ func sendLocationUpdates(conn net.Conn, msgSN *uint32, interval time.Duration) {
 		pkg, err := jtt809.EncodePackage(jtt809.Package{
 			Header: jtt809.Header{
 				MsgSN:        *msgSN,
-				BusinessType: jtt809.MsgIDDynamicInfo,
+				BusinessType: jtt809.UP_EXG_MSG,
 				Version:      jtt809.Version{Major: 1, Minor: 0, Patch: 0},
 			},
 			Body: upload,

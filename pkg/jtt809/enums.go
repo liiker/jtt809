@@ -19,26 +19,25 @@ const (
 
 // SubBusinessType 定义子业务数据类型，截取常用值以支持定位、查岗等业务。
 const (
-	SubMsgUploadVehicleReg uint16 = 0x1201 // 上传车辆注册信息
-	SubMsgRealLocation     uint16 = 0x1202 // 实时上传车辆定位信息
-	SubMsgBatchLocation    uint16 = 0x1203 // 车辆定位信息自动补报
-	SubMsgWarnSuperviseReq uint16 = 0x9401 // 报警督办请求
-	SubMsgPlatformQueryAck uint16 = 0x1301 // 平台查岗应答
-	SubMsgWarnMsgAdptInfo  uint16 = 0x1402 // 上报报警信息消息
-	SubMsgWarnMsgInformTips uint16 = 0x1403 // 上报报警预警消息
+	// 上行子业务 (下级平台->上级平台)
+	UP_EXG_MSG_REGISTER            uint16 = 0x1201 // 上传车辆注册信息
+	UP_EXG_MSG_REAL_LOCATION       uint16 = 0x1202 // 实时上传车辆定位信息
+	UP_EXG_MSG_HISTORY_LOCATION    uint16 = 0x1203 // 车辆定位信息自动补报
+	UP_EXG_MSG_RETURN_STARTUP_ACK  uint16 = 0x1205 // 启动车辆定位信息交换应答
+	UP_EXG_MSG_RETURN_END_ACK      uint16 = 0x1206 // 结束车辆定位信息交换应答
+	UP_PLATFORM_MSG_POST_QUERY_ACK uint16 = 0x1301 // 平台查岗应答
+	UP_WARN_MSG_ADPT_INFO          uint16 = 0x1402 // 上报报警信息
+	UP_WARN_MSG_INFORM_TIPS        uint16 = 0x1403 // 上报报警预警消息
 
 	// 下行子业务 (上级平台->下级平台)
-	SubMsgApplyForMonitorStartup uint16 = 0x9205 // 启动车辆定位信息交换请求
-	SubMsgApplyForMonitorEnd     uint16 = 0x9206 // 结束车辆定位信息交换请求
-
-	// 上行应答子业务 (下级平台->上级平台)
-	SubMsgApplyForMonitorStartupAck uint16 = 0x1205 // 启动车辆定位信息交换应答
-	SubMsgApplyForMonitorEndAck     uint16 = 0x1206 // 结束车辆定位信息交换应答
+	DOWN_EXG_MSG_RETURN_STARTUP uint16 = 0x9205 // 启动车辆定位信息交换请求
+	DOWN_EXG_MSG_RETURN_END     uint16 = 0x9206 // 结束车辆定位信息交换请求
+	DOWN_WARN_MSG_URGE_TODO_REQ uint16 = 0x9401 // 报警督办请求
 
 	// JT/T 1078-2016 子业务
-	SubMsgAuthorizeStartupReq         uint16 = 0x1701 // 时效口令上报消息 (UP_AUTHORIZE_MSG_STARTUP)
-	SubMsgRealTimeVideoStartupAck     uint16 = 0x1801 // 实时音视频请求应答消息 (UP_REALVIDEO_MSG_STARTUP_ACK)
-	SubMsgDownRealTimeVideoStartupReq uint16 = 0x9801 // 实时音视频请求消息 (DOWN_REALVIDEO_MSG_STARTUP)
+	UP_AUTHORIZE_MSG_STARTUP     uint16 = 0x1701 // 时效口令上报消息
+	UP_REALVIDEO_MSG_STARTUP_ACK uint16 = 0x1801 // 实时音视频请求应答消息
+	DOWN_REALVIDEO_MSG_STARTUP   uint16 = 0x9801 // 实时音视频请求消息
 )
 
 // MonitorReasonCode 启动/结束车辆定位信息交换请求原因

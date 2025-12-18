@@ -131,7 +131,7 @@ func (g *JT809Gateway) RequestVideoStream(req VideoRequest) error {
 		GNSSCenterID: snap.GNSSCenterID,
 	}
 	if err := g.SendToSubordinate(req.UserID, header, rawBody{
-		msgID:   jtt809.MsgIDDownRealTimeVideo,
+		msgID:   jtt809.DOWN_REALVIDEO_MSG,
 		payload: subBody,
 	}); err != nil {
 		return fmt.Errorf("send video request: %w", err)

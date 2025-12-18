@@ -22,7 +22,7 @@ func ParsePlatformQueryAck(pkt *SubBusinessPacket) (*PlatformQueryAck, error) {
 	if pkt == nil {
 		return nil, errors.New("nil packet")
 	}
-	if pkt.SubBusinessID != SubMsgPlatformQueryAck {
+	if pkt.SubBusinessID != UP_PLATFORM_MSG_POST_QUERY_ACK {
 		return nil, fmt.Errorf("unsupported sub business id: %x", pkt.SubBusinessID)
 	}
 	p := pkt.Payload

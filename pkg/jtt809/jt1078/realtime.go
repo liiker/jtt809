@@ -18,7 +18,7 @@ type DownRealTimeVideoStartupReq struct {
 	GnssData      []byte // 36 bytes, optional
 }
 
-func (DownRealTimeVideoStartupReq) MsgID() uint16 { return jtt809.SubMsgDownRealTimeVideoStartupReq }
+func (DownRealTimeVideoStartupReq) MsgID() uint16 { return jtt809.DOWN_REALVIDEO_MSG_STARTUP }
 
 func (r DownRealTimeVideoStartupReq) Encode() ([]byte, error) {
 	var buf bytes.Buffer
@@ -59,7 +59,7 @@ type RealTimeVideoStartupAck struct {
 	ServerPort uint16
 }
 
-func (RealTimeVideoStartupAck) MsgID() uint16 { return jtt809.SubMsgRealTimeVideoStartupAck }
+func (RealTimeVideoStartupAck) MsgID() uint16 { return jtt809.UP_REALVIDEO_MSG_STARTUP_ACK }
 
 func (r RealTimeVideoStartupAck) Encode() ([]byte, error) {
 	var buf bytes.Buffer

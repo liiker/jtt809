@@ -32,7 +32,7 @@ func TestWarnSuperviseRequestEncode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse sub business: %v", err)
 	}
-	if sub.SubBusinessID != SubMsgWarnSuperviseReq {
+	if sub.SubBusinessID != DOWN_WARN_MSG_URGE_TODO_REQ {
 		t.Fatalf("unexpected sub business id: %x", sub.SubBusinessID)
 	}
 	if sub.PayloadLength != 92 {

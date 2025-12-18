@@ -24,7 +24,7 @@ type WarnSuperviseRequest struct {
 	SupervisorEmail string
 }
 
-func (WarnSuperviseRequest) MsgID() uint16 { return MsgIDAlarmInteract }
+func (WarnSuperviseRequest) MsgID() uint16 { return UP_WARN_MSG }
 
 // Encode 构造 0x1400 主业务下的 0x9401 子业务报文。
 func (w WarnSuperviseRequest) Encode() ([]byte, error) {
@@ -38,7 +38,7 @@ func (w WarnSuperviseRequest) Encode() ([]byte, error) {
 	var buf bytes.Buffer
 	buf.Write(PadRightGBK(w.VehicleNo, 21))
 	buf.WriteByte(byte(w.VehicleColor))
-	_ = binary.Write(&buf, binary.BigEndian, SubMsgWarnSuperviseReq)
+	_ = binary.Write(&buf, binary.BigEndian, DOWN_WARN_MSG_URGE_TODO_REQ)
 	_ = binary.Write(&buf, binary.BigEndian, uint32(len(body)))
 	buf.Write(body)
 	return buf.Bytes(), nil

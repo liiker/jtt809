@@ -8,7 +8,7 @@ type LogoutRequest struct {
 	Password string // 长度8
 }
 
-func (LogoutRequest) MsgID() uint16 { return MsgIDLogoutRequest }
+func (LogoutRequest) MsgID() uint16 { return UP_DISCONNECT_REQ }
 
 func (l LogoutRequest) Encode() ([]byte, error) {
 	return LoginRequest{UserID: l.UserID, Password: l.Password, DownLinkIP: "0", DownLinkPort: 0}.Encode()
@@ -17,7 +17,7 @@ func (l LogoutRequest) Encode() ([]byte, error) {
 // LogoutResponse 主链路注销应答（0x1004），业务体为空。
 type LogoutResponse struct{}
 
-func (LogoutResponse) MsgID() uint16           { return MsgIDLogoutResponse }
+func (LogoutResponse) MsgID() uint16           { return UP_DISCONNECT_RSP }
 func (LogoutResponse) Encode() ([]byte, error) { return []byte{}, nil }
 
 // DisconnectInform 主链路断开通知（0x1007），从链路下发，用于告知登录失效或链路异常原因。
@@ -25,7 +25,7 @@ type DisconnectInform struct {
 	ErrorCode DisconnectErrorCode
 }
 
-func (DisconnectInform) MsgID() uint16 { return MsgIDDisconnNotify }
+func (DisconnectInform) MsgID() uint16 { return UP_DISCONNECT_INFORM }
 func (d DisconnectInform) Encode() ([]byte, error) {
 	return []byte{byte(d.ErrorCode)}, nil
 }
@@ -35,7 +35,7 @@ func ParseDisconnectInform(frame *Frame) (*DisconnectInform, error) {
 	if frame == nil {
 		return nil, errors.New("frame is nil")
 	}
-	if frame.BodyID != MsgIDDisconnNotify {
+	if frame.BodyID != UP_DISCONNECT_INFORM {
 		return nil, errors.New("unexpected body id")
 	}
 	if len(frame.RawBody) < 1 {
@@ -49,7 +49,7 @@ type DownDisconnectInform struct {
 	ErrorCode DisconnectErrorCode
 }
 
-func (DownDisconnectInform) MsgID() uint16 { return MsgIDDownDisconnectInform }
+func (DownDisconnectInform) MsgID() uint16 { return DOWN_DISCONNECT_INFORM }
 func (d DownDisconnectInform) Encode() ([]byte, error) {
 	return []byte{byte(d.ErrorCode)}, nil
 }
@@ -59,7 +59,7 @@ func ParseDownDisconnectInform(frame *Frame) (*DownDisconnectInform, error) {
 	if frame == nil {
 		return nil, errors.New("frame is nil")
 	}
-	if frame.BodyID != MsgIDDownDisconnectInform {
+	if frame.BodyID != DOWN_DISCONNECT_INFORM {
 		return nil, errors.New("unexpected body id")
 	}
 	if len(frame.RawBody) < 1 {
@@ -73,12 +73,12 @@ type SubLinkCloseNotify struct {
 	ReasonCode byte
 }
 
-func (SubLinkCloseNotify) MsgID() uint16             { return MsgIDCloseNotify }
+func (SubLinkCloseNotify) MsgID() uint16             { return DOWN_CLOSELINK_INFORM }
 func (s SubLinkCloseNotify) Encode() ([]byte, error) { return []byte{s.ReasonCode}, nil }
 
 // BuildLogoutRequestPackage 便捷构造注销请求完整报文（含转义）。
 func BuildLogoutRequestPackage(header Header, req LogoutRequest) ([]byte, error) {
-	header.BusinessType = MsgIDLogoutRequest
+	header.BusinessType = UP_DISCONNECT_REQ
 	return EncodePackage(Package{
 		Header: header,
 		Body:   req,
@@ -87,7 +87,7 @@ func BuildLogoutRequestPackage(header Header, req LogoutRequest) ([]byte, error)
 
 // BuildLogoutResponsePackage 便捷构造注销应答完整报文（含转义），根据请求头反填应答业务 ID。
 func BuildLogoutResponsePackage(requestHeader Header) ([]byte, error) {
-	header := requestHeader.WithResponse(MsgIDLogoutResponse)
+	header := requestHeader.WithResponse(UP_DISCONNECT_RSP)
 	return EncodePackage(Package{
 		Header: header,
 		Body:   LogoutResponse{},

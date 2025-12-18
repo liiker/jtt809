@@ -19,7 +19,7 @@ type BatchLocationUpload struct {
 	Locations    []BatchLocationRecord
 }
 
-func (BatchLocationUpload) MsgID() uint16 { return MsgIDDynamicInfo }
+func (BatchLocationUpload) MsgID() uint16 { return UP_EXG_MSG }
 
 // Encode 构造 0x1203 子业务载荷，并封装到 0x1200 主链路报文。
 func (v BatchLocationUpload) Encode() ([]byte, error) {
@@ -52,7 +52,7 @@ func (v BatchLocationUpload) Encode() ([]byte, error) {
 	finalBuf.WriteByte(byte(v.VehicleColor))
 	finalBuf.Write(buf.Bytes())
 
-	const subMsgID uint16 = SubMsgBatchLocation
+	const subMsgID uint16 = UP_EXG_MSG_HISTORY_LOCATION
 	var out bytes.Buffer
 	_ = binary.Write(&out, binary.BigEndian, subMsgID)
 	_ = binary.Write(&out, binary.BigEndian, uint32(finalBuf.Len()))

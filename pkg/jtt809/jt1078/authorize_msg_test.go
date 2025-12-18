@@ -21,7 +21,7 @@ func TestAuthorizeMsg(t *testing.T) {
 
 	// 构造 0x1700 消息体
 	authMsg := AuthorizeMsg{
-		SubBusinessID: jtt809.SubMsgAuthorizeStartupReq,
+		SubBusinessID: jtt809.UP_AUTHORIZE_MSG_STARTUP,
 		Payload:       reqPayload,
 	}
 
@@ -42,7 +42,7 @@ func TestAuthorizeMsg(t *testing.T) {
 		t.Fatalf("parse auth msg failed: %v", err)
 	}
 
-	if decoded.SubBusinessID != jtt809.SubMsgAuthorizeStartupReq {
+	if decoded.SubBusinessID != jtt809.UP_AUTHORIZE_MSG_STARTUP {
 		t.Errorf("expected sub id 0x1701, got 0x%04X", decoded.SubBusinessID)
 	}
 

@@ -35,7 +35,7 @@ type AuthorizeMsg struct {
 	Payload       []byte // 变长 - JT/T 1078-2016 数据
 }
 
-func (m AuthorizeMsg) MsgID() uint16 { return jtt809.MsgIDAuthorize }
+func (m AuthorizeMsg) MsgID() uint16 { return jtt809.UP_AUTHORIZE_MSG }
 
 func (m AuthorizeMsg) Encode() ([]byte, error) {
 	var buf bytes.Buffer

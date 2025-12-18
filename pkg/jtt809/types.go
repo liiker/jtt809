@@ -15,30 +15,31 @@ const (
 	endFlag   byte = 0x5d
 
 	// MsgID* 定义 JT/T 809-2019 主链路与从链路常用业务 ID。
-	MsgIDLoginRequest          uint16 = 0x1001
-	MsgIDLoginResponse         uint16 = 0x1002
-	MsgIDLogoutRequest         uint16 = 0x1003
-	MsgIDLogoutResponse        uint16 = 0x1004
-	MsgIDHeartbeatRequest      uint16 = 0x1005
-	MsgIDHeartbeatResponse     uint16 = 0x1006
-	MsgIDDynamicInfo           uint16 = 0x1200
-	MsgIDAlarmInteract         uint16 = 0x1400
-	MsgIDPlatformInfo          uint16 = 0x1300
-	MsgIDDisconnNotify         uint16 = 0x1007
-	MsgIDDownlinkConnReq       uint16 = 0x9001
-	MsgIDDownlinkConnResp      uint16 = 0x9002
-	MsgIDDownHeartbeatRequest  uint16 = 0x9005
-	MsgIDDownHeartbeatResponse uint16 = 0x9006
-	MsgIDDownDisconnectInform  uint16 = 0x9007
-	MsgIDCloseNotify           uint16 = 0x9008
 
-	// 从链路下行业务
-	MsgIDDownExgMsg uint16 = 0x9200 // 从链路车辆动态信息交换业务
+	UP_CONNECT_REQ         uint16 = 0x1001 // 主链路登录请求消息
+	UP_CONNECT_RSP         uint16 = 0x1002 // 主链路登录应答消息
+	UP_DISCONNECT_REQ      uint16 = 0x1003 // 主链路注销请求消息
+	UP_DISCONNECT_RSP      uint16 = 0x1004 // 主链路注销应答消息
+	UP_LINKTEST_REQ        uint16 = 0x1005 // 主链路连接保持请求消息
+	UP_LINKTEST_RSP        uint16 = 0x1006 // 主链路连接保持应答消息
+	UP_DISCONNECT_INFORM   uint16 = 0x1007 // 主链路断开通知消息
+	UP_EXG_MSG             uint16 = 0x1200 // 主链路动态信息交换消息
+	UP_PLATFORM_MSG        uint16 = 0x1300 // 主链路平台间信息交互消息
+	UP_WARN_MSG            uint16 = 0x1400 // 主链路报警信息交互消息
+	DOWN_CONNECT_REQ       uint16 = 0x9001 // 从链路连接请求消息
+	DOWN_CONNECT_RSP       uint16 = 0x9002 // 从链路连接应答消息
+	DOWN_DISCONNECT_REQ    uint16 = 0x9003 // 从链路注销请求消息
+	DOWN_DISCONNECT_RSP    uint16 = 0x9004 // 从链路注销应答消息
+	DOWN_LINKTEST_REQ      uint16 = 0x9005 // 从链路连接保持请求消息
+	DOWN_LINKTEST_RSP      uint16 = 0x9006 // 从链路连接保持应答消息
+	DOWN_DISCONNECT_INFORM uint16 = 0x9007 // 从链路断开通知消息
+	DOWN_CLOSELINK_INFORM  uint16 = 0x9008 // 上级平台主动关闭链路通知消息
+	DOWN_EXG_MSG           uint16 = 0x9200 // 从链路动态信息交换消息
 
 	// JT/T 1078-2016 视频业务
-	MsgIDAuthorize         uint16 = 0x1700 // 视频相关鉴权
-	MsgIDRealTimeVideo     uint16 = 0x1800 // 实时音视频
-	MsgIDDownRealTimeVideo uint16 = 0x9800 // 下行实时音视频
+	UP_AUTHORIZE_MSG   uint16 = 0x1700 // 视频相关鉴权
+	UP_REALVIDEO_MSG   uint16 = 0x1800 // 实时音视频
+	DOWN_REALVIDEO_MSG uint16 = 0x9800 // 下行实时音视频
 )
 
 // Version 表示 3 字节协议版本号，对应主版本/次版本/修订号。

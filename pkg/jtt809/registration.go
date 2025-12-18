@@ -29,7 +29,7 @@ type LoginRequest struct {
 	DownLinkPort uint16
 }
 
-func (l LoginRequest) MsgID() uint16 { return MsgIDLoginRequest }
+func (l LoginRequest) MsgID() uint16 { return UP_CONNECT_REQ }
 
 func (l LoginRequest) Encode() ([]byte, error) {
 	if err := l.validate(); err != nil {
@@ -78,7 +78,7 @@ type LoginResponse struct {
 	VerifyCode uint32
 }
 
-func (LoginResponse) MsgID() uint16 { return MsgIDLoginResponse }
+func (LoginResponse) MsgID() uint16 { return UP_CONNECT_RSP }
 
 func (l LoginResponse) Encode() ([]byte, error) {
 	buf := []byte{byte(l.Result), 0x00, 0x00, 0x00, 0x00}
@@ -91,7 +91,7 @@ type AuthValidator func(LoginRequest) (LoginResponse, error)
 
 // BuildLoginPackage 直接构造登录请求完整报文（含头、业务体与转义）。
 func BuildLoginPackage(header Header, req LoginRequest) ([]byte, error) {
-	header.BusinessType = MsgIDLoginRequest
+	header.BusinessType = UP_CONNECT_REQ
 	return EncodePackage(Package{
 		Header: header,
 		Body:   req,
@@ -100,7 +100,7 @@ func BuildLoginPackage(header Header, req LoginRequest) ([]byte, error) {
 
 // BuildLoginResponsePackage 根据请求头构造对应的登录应答报文，自动填充响应业务 ID。
 func BuildLoginResponsePackage(requestHeader Header, resp LoginResponse) ([]byte, error) {
-	header := requestHeader.WithResponse(MsgIDLoginResponse)
+	header := requestHeader.WithResponse(UP_CONNECT_RSP)
 	return EncodePackage(Package{
 		Header: header,
 		Body:   resp,

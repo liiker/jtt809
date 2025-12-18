@@ -34,7 +34,7 @@ func TestGenerateLoginResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if respFrame.Header.BusinessType != MsgIDLoginResponse {
+	if respFrame.Header.BusinessType != UP_CONNECT_RSP {
 		t.Fatalf("unexpected response type: %x", respFrame.Header.BusinessType)
 	}
 	if len(respFrame.RawBody) < 5 {

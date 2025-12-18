@@ -14,7 +14,7 @@ func TestSubLinkSendLoginRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode frame: %v", err)
 	}
-	if frame.BodyID != MsgIDDownlinkConnReq {
+	if frame.BodyID != DOWN_CONNECT_REQ {
 		t.Fatalf("unexpected body id: %x", frame.BodyID)
 	}
 	if len(frame.RawBody) != 4 {

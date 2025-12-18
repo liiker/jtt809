@@ -44,7 +44,7 @@ type VehicleLocationUpload struct {
 	Position     *VehiclePosition
 }
 
-func (VehicleLocationUpload) MsgID() uint16 { return MsgIDDynamicInfo }
+func (VehicleLocationUpload) MsgID() uint16 { return UP_EXG_MSG }
 
 func (v VehicleLocationUpload) Encode() ([]byte, error) {
 	if len(v.VehicleNo) == 0 {

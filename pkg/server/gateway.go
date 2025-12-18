@@ -26,11 +26,11 @@ type LinkPolicy struct {
 
 // 链路策略配置表
 var linkPolicies = map[uint16]LinkPolicy{
-	jtt809.MsgIDLoginResponse:        {PreferredLink: "main", AllowFallback: false}, // 0x1002 主链路登录应答，不能降级
-	jtt809.MsgIDDownlinkConnReq:      {PreferredLink: "sub", AllowFallback: false},  // 0x9001 从链路登录请求，不能降级
-	jtt809.MsgIDDownHeartbeatRequest: {PreferredLink: "sub", AllowFallback: false},  // 0x9005 从链路心跳请求，不能降级
-	jtt809.MsgIDDownDisconnectInform: {PreferredLink: "main", AllowFallback: false}, // 0x9007 从链路断开通知，只能主链路
-	jtt809.MsgIDHeartbeatResponse:    {PreferredLink: "both", AllowFallback: false}, // 0x1006 主链路心跳应答需主/从链路各发一次,原因是因为有些平台没按照规范处理通过从链路返回的主链路心跳应答
+	jtt809.UP_CONNECT_RSP:         {PreferredLink: "main", AllowFallback: false}, // 0x1002 主链路登录应答，不能降级
+	jtt809.DOWN_CONNECT_REQ:       {PreferredLink: "sub", AllowFallback: false},  // 0x9001 从链路登录请求，不能降级
+	jtt809.DOWN_LINKTEST_REQ:      {PreferredLink: "sub", AllowFallback: false},  // 0x9005 从链路心跳请求，不能降级
+	jtt809.DOWN_DISCONNECT_INFORM: {PreferredLink: "main", AllowFallback: false}, // 0x9007 从链路断开通知，只能主链路
+	jtt809.UP_LINKTEST_RSP:        {PreferredLink: "both", AllowFallback: false}, // 0x1006 主链路心跳应答需主/从链路各发一次,原因是因为有些平台没按照规范处理通过从链路返回的主链路心跳应答
 }
 
 // 默认策略：从链路，允许降级
@@ -203,17 +203,17 @@ func (g *JT809Gateway) handleMainMessage(session *goserver.AppSession, payload [
 		slog.Warn("decode main frame failed", "session", session.ID, "err", err)
 		return nil, nil
 	}
-	if _, ok := g.sessionUser(session); !ok && frame.BodyID != jtt809.MsgIDLoginRequest {
+	if _, ok := g.sessionUser(session); !ok && frame.BodyID != jtt809.UP_CONNECT_REQ {
 		// 未登录成功前的报文直接忽略
 		slog.Warn("ignore message before login", "session", session.ID, "msg_id", fmt.Sprintf("0x%04X", frame.BodyID))
 		return nil, nil
 	}
 	switch frame.BodyID {
-	case jtt809.MsgIDLoginRequest:
+	case jtt809.UP_CONNECT_REQ:
 		return g.handleMainLogin(session, frame)
-	case jtt809.MsgIDHeartbeatRequest:
+	case jtt809.UP_LINKTEST_REQ:
 		return g.handleHeartbeat(session, frame, true)
-	case jtt809.MsgIDLogoutRequest:
+	case jtt809.UP_DISCONNECT_REQ:
 		user, ok := g.sessionUser(session)
 		if ok {
 			resp := jtt809.LogoutResponse{}
@@ -222,7 +222,7 @@ func (g *JT809Gateway) handleMainMessage(session *goserver.AppSession, payload [
 			}
 		}
 		return nil, nil
-	case jtt809.MsgIDDownDisconnectInform:
+	case jtt809.DOWN_DISCONNECT_INFORM:
 		g.handleDisconnectInform(session, frame)
 	default:
 		user, ok := g.sessionUser(session)
@@ -244,11 +244,11 @@ func (g *JT809Gateway) handleSubMessage(userID uint32, payload []byte) {
 	}
 
 	switch frame.BodyID {
-	case jtt809.MsgIDDownlinkConnReq:
+	case jtt809.DOWN_CONNECT_REQ:
 		slog.Debug("received sub link login request on sub link", "user_id", userID)
-	case jtt809.MsgIDDownlinkConnResp:
+	case jtt809.DOWN_CONNECT_RSP:
 		slog.Debug("received sub link login response", "user_id", userID)
-	case jtt809.MsgIDDisconnNotify:
+	case jtt809.UP_DISCONNECT_INFORM:
 		g.handleSubDisconnect(userID, frame)
 	default:
 		g.handleBusinessMessage(userID, frame, false)
@@ -258,17 +258,17 @@ func (g *JT809Gateway) handleSubMessage(userID uint32, payload []byte) {
 // handleBusinessMessage 处理可能在主链路或从链路接收的业务消息
 func (g *JT809Gateway) handleBusinessMessage(userID uint32, frame *jtt809.Frame, receivedOnMain bool) {
 	switch frame.BodyID {
-	case jtt809.MsgIDDynamicInfo:
+	case jtt809.UP_EXG_MSG:
 		g.handleDynamicInfo(userID, frame)
-	case jtt809.MsgIDPlatformInfo:
+	case jtt809.UP_PLATFORM_MSG:
 		g.handlePlatformInfo(userID, frame)
-	case jtt809.MsgIDRealTimeVideo:
+	case jtt809.UP_REALVIDEO_MSG:
 		g.handleRealTimeVideo(userID, frame)
-	case jtt809.MsgIDAuthorize:
+	case jtt809.UP_AUTHORIZE_MSG:
 		g.handleAuthorize(userID, frame)
-	case jtt809.MsgIDAlarmInteract:
+	case jtt809.UP_WARN_MSG:
 		g.handleAlarmInteract(userID, frame)
-	case jtt809.MsgIDDownHeartbeatResponse:
+	case jtt809.DOWN_LINKTEST_RSP:
 		g.store.RecordHeartbeat(userID, false)
 	default:
 		linkType := "main"
@@ -414,7 +414,7 @@ func (g *JT809Gateway) connectSubLink(ip string, port uint16, userID uint32, gns
 	// Send Login
 	req := jtt809.SubLinkLoginRequest{VerifyCode: verifyCode}
 	pkg, _ := jtt809.BuildSubLinkLoginPackage(jtt809.Header{
-		BusinessType: jtt809.MsgIDDownlinkConnReq,
+		BusinessType: jtt809.DOWN_CONNECT_REQ,
 		GNSSCenterID: gnssCenterID,
 	}, req)
 
@@ -624,7 +624,7 @@ func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
 		return
 	}
 	switch {
-	case pkt.SubBusinessID == jtt809.SubMsgUploadVehicleReg:
+	case pkt.SubBusinessID == jtt809.UP_EXG_MSG_REGISTER:
 		info, err := jtt809.ParseVehicleRegistration(pkt.Payload)
 		if err != nil {
 			slog.Warn("parse vehicle registration failed", "user_id", userID, "err", err)
@@ -648,7 +648,7 @@ func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
 
 		// 自动订阅该车辆的实时定位数据
 		go g.autoSubscribeVehicle(userID, pkt.Color, pkt.Plate)
-	case pkt.SubBusinessID == jtt809.SubMsgRealLocation:
+	case pkt.SubBusinessID == jtt809.UP_EXG_MSG_REAL_LOCATION:
 		pos, err := jtt809.ParseVehiclePosition(pkt.Payload)
 		if err != nil {
 			slog.Warn("parse vehicle position failed", "user_id", userID, "err", err)
@@ -669,7 +669,7 @@ func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
 		} else {
 			slog.Info("vehicle location", "user_id", userID, "plate", pkt.Plate, "gnss_len", len(pos.GnssData))
 		}
-	case pkt.SubBusinessID == jtt809.SubMsgBatchLocation:
+	case pkt.SubBusinessID == jtt809.UP_EXG_MSG_HISTORY_LOCATION:
 		if len(pkt.Payload) == 0 {
 			return
 		}
@@ -702,7 +702,7 @@ func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
 		if g.callbacks != nil && g.callbacks.OnBatchLocation != nil {
 			go g.callbacks.OnBatchLocation(userID, pkt.Plate, pkt.Color, gnsss)
 		}
-	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorStartupAck:
+	case pkt.SubBusinessID == jtt809.UP_EXG_MSG_RETURN_STARTUP_ACK:
 		ack, err := jtt809.ParseMonitorAck(pkt.Payload)
 		if err != nil {
 			slog.Warn("parse monitor startup ack failed", "user_id", userID, "err", err, "payload_hex", fmt.Sprintf("%X", pkt.Payload))
@@ -719,7 +719,7 @@ func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
 		if g.callbacks != nil && g.callbacks.OnMonitorStartupAck != nil {
 			go g.callbacks.OnMonitorStartupAck(userID, pkt.Plate, pkt.Color)
 		}
-	case pkt.SubBusinessID == jtt809.SubMsgApplyForMonitorEndAck:
+	case pkt.SubBusinessID == jtt809.UP_EXG_MSG_RETURN_END_ACK:
 		ack, err := jtt809.ParseMonitorAck(pkt.Payload)
 		if err != nil {
 			slog.Warn("parse monitor end ack failed", "user_id", userID, "err", err, "payload_hex", fmt.Sprintf("%X", pkt.Payload))
@@ -747,7 +747,7 @@ func (g *JT809Gateway) handlePlatformInfo(userID uint32, frame *jtt809.Frame) {
 		slog.Warn("parse platform info failed", "user_id", userID, "err", err)
 		return
 	}
-	if pkt.SubBusinessID == jtt809.SubMsgPlatformQueryAck {
+	if pkt.SubBusinessID == jtt809.UP_PLATFORM_MSG_POST_QUERY_ACK {
 		ack, err := jtt809.ParsePlatformQueryAck(pkt)
 		if err != nil {
 			slog.Warn("parse platform query ack failed", "user_id", userID, "err", err)
@@ -766,7 +766,7 @@ func (g *JT809Gateway) handleAlarmInteract(userID uint32, frame *jtt809.Frame) {
 		return
 	}
 	switch pkt.SubBusinessID {
-	case jtt809.SubMsgWarnMsgAdptInfo:
+	case jtt809.UP_WARN_MSG_ADPT_INFO:
 		info, err := jtt809.ParseWarnMsgAdptInfo(pkt.Payload)
 		if err != nil {
 			slog.Warn("parse warn msg adpt info failed", "user_id", userID, "err", err, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
@@ -787,7 +787,7 @@ func (g *JT809Gateway) handleAlarmInteract(userID uint32, frame *jtt809.Frame) {
 		if g.callbacks != nil && g.callbacks.OnWarnMsgAdptInfo != nil {
 			go g.callbacks.OnWarnMsgAdptInfo(userID, info)
 		}
-	case jtt809.SubMsgWarnMsgInformTips:
+	case jtt809.UP_WARN_MSG_INFORM_TIPS:
 		info, err := jtt809.ParseWarnMsgInformTips(pkt.Payload)
 		if err != nil {
 			slog.Warn("parse warn msg inform tips failed", "user_id", userID, "err", err, "sub_id", fmt.Sprintf("0x%04X", pkt.SubBusinessID))
@@ -828,7 +828,7 @@ func (g *JT809Gateway) handleRealTimeVideo(userID uint32, frame *jtt809.Frame) {
 		slog.Warn("parse sub business failed", "user_id", userID, "err", err)
 		return
 	}
-	if pkt.SubBusinessID == jtt809.SubMsgRealTimeVideoStartupAck {
+	if pkt.SubBusinessID == jtt809.UP_REALVIDEO_MSG_STARTUP_ACK {
 		ack, err := jt1078.ParseRealTimeVideoStartupAck(pkt.Payload)
 		if err != nil {
 			slog.Warn("parse video ack failed", "user_id", userID, "err", err)
@@ -1049,7 +1049,7 @@ func (g *JT809Gateway) handleAuthorize(userID uint32, frame *jtt809.Frame) {
 		return
 	}
 	switch msg.SubBusinessID {
-	case jtt809.SubMsgAuthorizeStartupReq: // 0x1701
+	case jtt809.UP_AUTHORIZE_MSG_STARTUP: // 0x1701
 		req, err := jt1078.ParseAuthorizeStartupReq(msg.Payload)
 		if err != nil {
 			slog.Warn("parse authorize startup req failed", "user_id", userID, "err", err)

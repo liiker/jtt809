@@ -14,7 +14,7 @@ func TestHeartbeatEncode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode frame: %v", err)
 	}
-	if frame.BodyID != MsgIDHeartbeatRequest {
+	if frame.BodyID != UP_LINKTEST_REQ {
 		t.Fatalf("unexpected body id: %x", frame.BodyID)
 	}
 	if len(frame.RawBody) != 0 {

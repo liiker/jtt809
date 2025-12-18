@@ -33,7 +33,7 @@ func TestBatchLocationUploadEncode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse sub business: %v", err)
 	}
-	if sub.SubBusinessID != SubMsgBatchLocation {
+	if sub.SubBusinessID != UP_EXG_MSG_HISTORY_LOCATION {
 		t.Fatalf("unexpected sub business id: %x", sub.SubBusinessID)
 	}
 	if sub.PayloadLength != 101 {

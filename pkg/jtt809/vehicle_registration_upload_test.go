@@ -25,7 +25,7 @@ func TestVehicleRegistrationUploadEncode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode frame: %v", err)
 	}
-	if frame.BodyID != MsgIDDynamicInfo {
+	if frame.BodyID != UP_EXG_MSG {
 		t.Fatalf("unexpected body id: %x", frame.BodyID)
 	}
 
@@ -33,7 +33,7 @@ func TestVehicleRegistrationUploadEncode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse sub business: %v", err)
 	}
-	if sub.SubBusinessID != SubMsgUploadVehicleReg {
+	if sub.SubBusinessID != UP_EXG_MSG_REGISTER {
 		t.Fatalf("unexpected sub business id: %x", sub.SubBusinessID)
 	}
 	if sub.PayloadLength != 110 {

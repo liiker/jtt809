@@ -12,7 +12,7 @@ type SubLinkLoginRequest struct {
 	VerifyCode uint32 // 主链路登录成功后返回的校验码
 }
 
-func (SubLinkLoginRequest) MsgID() uint16 { return MsgIDDownlinkConnReq }
+func (SubLinkLoginRequest) MsgID() uint16 { return DOWN_CONNECT_REQ }
 
 func (s SubLinkLoginRequest) Encode() ([]byte, error) {
 	var buf [4]byte
@@ -80,13 +80,13 @@ func (n SubLinkDisconnectNotify) Encode() ([]byte, error) { return []byte{n.Reas
 
 // BuildSubLinkLoginPackage 构造从链路登录请求完整报文（含转义）。
 func BuildSubLinkLoginPackage(header Header, req SubLinkLoginRequest) ([]byte, error) {
-	header.BusinessType = MsgIDDownlinkConnReq
+	header.BusinessType = DOWN_CONNECT_REQ
 	return EncodePackage(Package{Header: header, Body: req})
 }
 
 // BuildSubLinkHeartbeat 构造从链路心跳请求完整报文（含转义）。
 func BuildSubLinkHeartbeat(header Header) ([]byte, error) {
-	header.BusinessType = MsgIDDownHeartbeatRequest
+	header.BusinessType = DOWN_LINKTEST_REQ
 	return EncodePackage(Package{Header: header, Body: SubLinkHeartbeatRequest{}})
 }
 

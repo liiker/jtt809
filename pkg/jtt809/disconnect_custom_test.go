@@ -15,7 +15,7 @@ func TestDisconnectInform(t *testing.T) {
 	}
 
 	// 1. Check MsgID
-	assert.Equal(t, MsgIDDisconnNotify, msg.MsgID())
+	assert.Equal(t, UP_DISCONNECT_INFORM, msg.MsgID())
 
 	// 2. Encode
 	data, err := msg.Encode()
@@ -27,7 +27,7 @@ func TestDisconnectInform(t *testing.T) {
 		Header: Header{
 			MsgLength:    0, // Will be filled
 			MsgSN:        1,
-			BusinessType: MsgIDDisconnNotify,
+			BusinessType: UP_DISCONNECT_INFORM,
 			GNSSCenterID: 12345,
 			Version:      Version{Major: 1, Minor: 0, Patch: 0},
 			EncryptFlag:  0,
@@ -42,7 +42,7 @@ func TestDisconnectInform(t *testing.T) {
 
 	decodedFrame, err := DecodeFrame(encoded)
 	assert.NoError(t, err)
-	assert.Equal(t, MsgIDDisconnNotify, decodedFrame.Header.BusinessType)
+	assert.Equal(t, UP_DISCONNECT_INFORM, decodedFrame.Header.BusinessType)
 
 	decodedMsg, err := ParseDisconnectInform(decodedFrame)
 	assert.NoError(t, err)
@@ -57,7 +57,7 @@ func TestDownDisconnectInform(t *testing.T) {
 	}
 
 	// 1. Check MsgID
-	assert.Equal(t, MsgIDDownDisconnectInform, msg.MsgID())
+	assert.Equal(t, DOWN_DISCONNECT_INFORM, msg.MsgID())
 
 	// 2. Encode
 	data, err := msg.Encode()
@@ -75,7 +75,7 @@ func TestDownDisconnectInform(t *testing.T) {
 		Header: Header{
 			MsgLength:    0,
 			MsgSN:        2,
-			BusinessType: MsgIDDownDisconnectInform,
+			BusinessType: DOWN_DISCONNECT_INFORM,
 			GNSSCenterID: 67890,
 			Version:      Version{Major: 1, Minor: 0, Patch: 0},
 			EncryptFlag:  0,
@@ -90,7 +90,7 @@ func TestDownDisconnectInform(t *testing.T) {
 
 	decodedFrame, err := DecodeFrame(encoded)
 	assert.NoError(t, err)
-	assert.Equal(t, MsgIDDownDisconnectInform, decodedFrame.Header.BusinessType)
+	assert.Equal(t, DOWN_DISCONNECT_INFORM, decodedFrame.Header.BusinessType)
 
 	decodedMsg, err := ParseDownDisconnectInform(decodedFrame)
 	assert.NoError(t, err)

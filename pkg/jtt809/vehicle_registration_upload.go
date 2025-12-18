@@ -21,7 +21,7 @@ type VehicleRegistrationUpload struct {
 	TerminalSIM       string // 13 字节
 }
 
-func (VehicleRegistrationUpload) MsgID() uint16 { return MsgIDDynamicInfo }
+func (VehicleRegistrationUpload) MsgID() uint16 { return UP_EXG_MSG }
 
 // Encode 构造 0x1201 子业务载荷，并封装到 0x1200 主链路报文中。
 func (v VehicleRegistrationUpload) Encode() ([]byte, error) {
@@ -36,7 +36,7 @@ func (v VehicleRegistrationUpload) Encode() ([]byte, error) {
 	buf.Write(PadRightGBK(v.VehicleNo, 21)) // 使用 GBK 编码
 	buf.WriteByte(byte(v.VehicleColor))
 
-	const subMsgID uint16 = SubMsgUploadVehicleReg
+	const subMsgID uint16 = UP_EXG_MSG_REGISTER
 	_ = binary.Write(&buf, binary.BigEndian, subMsgID)
 	_ = binary.Write(&buf, binary.BigEndian, uint32(len(body)))
 	buf.Write(body)

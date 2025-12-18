@@ -12,7 +12,7 @@ func GenerateResponse(frame *Frame, auth AuthValidator) (*Package, error) {
 		return nil, errors.New("frame is nil")
 	}
 	switch frame.BodyID {
-	case MsgIDLoginRequest:
+	case UP_CONNECT_REQ:
 		if auth == nil {
 			return nil, errors.New("auth validator required for login response")
 		}
@@ -24,16 +24,16 @@ func GenerateResponse(frame *Frame, auth AuthValidator) (*Package, error) {
 		if err != nil {
 			return nil, err
 		}
-		header := frame.Header.WithResponse(MsgIDLoginResponse)
+		header := frame.Header.WithResponse(UP_CONNECT_RSP)
 		return &Package{Header: header, Body: resp}, nil
-	case MsgIDHeartbeatRequest:
-		header := frame.Header.WithResponse(MsgIDHeartbeatResponse)
+	case UP_LINKTEST_REQ:
+		header := frame.Header.WithResponse(UP_LINKTEST_RSP)
 		return &Package{Header: header, Body: HeartbeatResponse{}}, nil
-	case MsgIDLogoutRequest:
+	case UP_DISCONNECT_REQ:
 		// 注销应答（空体）
-		header := frame.Header.WithResponse(MsgIDLogoutResponse)
+		header := frame.Header.WithResponse(UP_DISCONNECT_RSP)
 		return &Package{Header: header, Body: LogoutResponse{}}, nil
-	case MsgIDDownlinkConnReq:
+	case DOWN_CONNECT_REQ:
 		header := frame.Header.WithResponse(0x9002)
 		return &Package{Header: header, Body: SubLinkLoginResponse{Result: 0}}, nil
 	case 0x9005:

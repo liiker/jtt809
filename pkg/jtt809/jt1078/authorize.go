@@ -23,7 +23,7 @@ type AuthorizeStartupReq struct {
 	AuthorizeCode2 string // 64 bytes
 }
 
-func (AuthorizeStartupReq) MsgID() uint16 { return jtt809.SubMsgAuthorizeStartupReq }
+func (AuthorizeStartupReq) MsgID() uint16 { return jtt809.UP_AUTHORIZE_MSG_STARTUP }
 
 func (r AuthorizeStartupReq) Encode() ([]byte, error) {
 	var buf bytes.Buffer

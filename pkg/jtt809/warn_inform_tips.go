@@ -86,7 +86,7 @@ func ParseWarnMsgInformPacket(body []byte) (*WarnMsgInformTips, error) {
 	if err != nil {
 		return nil, err
 	}
-	if pkt.SubBusinessID != SubMsgWarnMsgInformTips {
+	if pkt.SubBusinessID != UP_WARN_MSG_INFORM_TIPS {
 		return nil, fmt.Errorf("unexpected sub business id: %x", pkt.SubBusinessID)
 	}
 	return ParseWarnMsgInformTips(pkt.Payload)

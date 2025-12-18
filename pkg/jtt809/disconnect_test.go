@@ -13,7 +13,7 @@ func TestLogoutEncodeDecode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode frame: %v", err)
 	}
-	if frame.BodyID != MsgIDLogoutRequest {
+	if frame.BodyID != UP_DISCONNECT_REQ {
 		t.Fatalf("unexpected body id: %x", frame.BodyID)
 	}
 }
@@ -29,7 +29,7 @@ func TestLogoutAutoResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate response: %v", err)
 	}
-	if respPkg.Header.BusinessType != MsgIDLogoutResponse {
+	if respPkg.Header.BusinessType != UP_DISCONNECT_RSP {
 		t.Fatalf("unexpected resp id: %x", respPkg.Header.BusinessType)
 	}
 }

@@ -110,7 +110,7 @@ func ParseWarnMsgAdptPacket(body []byte) (*WarnMsgAdptInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if pkt.SubBusinessID != SubMsgWarnMsgAdptInfo {
+	if pkt.SubBusinessID != UP_WARN_MSG_ADPT_INFO {
 		return nil, fmt.Errorf("unexpected sub business id: %x", pkt.SubBusinessID)
 	}
 	return ParseWarnMsgAdptInfo(pkt.Payload)
