@@ -67,12 +67,12 @@ func main() {
 			// - 触发地理围栏判断
 			// - 更新车辆实时位置
 		},
-		OnBatchLocation: func(userID uint32, plate string, color jtt809.PlateColor, gnss []jtt809.GNSSData) {
+		OnVehicleLocationSupplementary: func(userID uint32, plate string, color jtt809.PlateColor, gnss []jtt809.GNSSData) {
 			slog.Info("【业务回调】批量定位",
 				"user_id", userID,
 				"plate", plate,
 				"count", len(gnss))
-			// 批量定位数据处理
+			// 车辆补报定位处理
 		},
 		OnVideoResponse: func(userID uint32, plate string, color jtt809.PlateColor, videoAck *server.VideoAckState) {
 			slog.Info("【业务回调】视频应答",

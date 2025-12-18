@@ -699,8 +699,8 @@ func (g *JT809Gateway) handleDynamicInfo(userID uint32, frame *jtt809.Frame) {
 		slog.Info("batch vehicle location", "user_id", userID, "plate", pkt.Plate, "count", parsed)
 
 		// 触发批量定位回调
-		if g.callbacks != nil && g.callbacks.OnBatchLocation != nil {
-			go g.callbacks.OnBatchLocation(userID, pkt.Plate, pkt.Color, gnsss)
+		if g.callbacks != nil && g.callbacks.OnVehicleLocationSupplementary != nil {
+			go g.callbacks.OnVehicleLocationSupplementary(userID, pkt.Plate, pkt.Color, gnsss)
 		}
 	case pkt.SubBusinessID == jtt809.UP_EXG_MSG_RETURN_STARTUP_ACK:
 		ack, err := jtt809.ParseMonitorAck(pkt.Payload)

@@ -505,6 +505,10 @@
             background: #5568d3;
         }
 
+        .hidden {
+            display: none !important;
+        }
+
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -574,6 +578,121 @@
             background: #cbd5e0;
         }
 
+        .player-overlay {
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .player-dialog {
+            background: linear-gradient(135deg, #0f172a, #111827);
+            border-radius: 14px;
+            width: min(980px, 100%);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+            border: 1px solid #1f2937;
+            color: #e2e8f0;
+        }
+
+        .player-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px 6px;
+        }
+
+        .player-title {
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+
+        .player-close {
+            border: none;
+            background: transparent;
+            color: #cbd5e0;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 6px 8px;
+            border-radius: 6px;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        .player-close:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .player-body {
+            position: relative;
+            padding: 0 18px 18px 18px;
+        }
+
+        .player-video {
+            width: 100%;
+            height: 60vh;
+            max-height: 60vh;
+            background: #000;
+            border-radius: 10px;
+            border: 1px solid #1f2937;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+        }
+
+        .player-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            font-size: 13px;
+            color: #cbd5e0;
+            gap: 12px;
+        }
+
+        .player-status {
+            color: #7dd3fc;
+            font-weight: 600;
+        }
+
+        .channel-tabs {
+            position: absolute;
+            right: -69px;
+            bottom: 50px;
+            top: auto;
+            transform: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: auto;
+            align-items: flex-end;
+        }
+
+        .channel-tab-btn {
+            width: 68px;
+            padding: 10px 8px;
+            background: #667eea;
+            color: white;
+            border: 1px solid #5568d3;
+            border-radius: 0 10px 10px 0;
+            cursor: pointer;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+            transition: all 0.2s ease;
+        }
+
+        .channel-tab-btn:hover {
+            transform: translateX(-2px);
+            background: #5568d3;
+            border-color: #4c51bf;
+        }
+
+        .channel-tab-btn.active {
+            background: #4c51bf;
+            color: white;
+            border-color: #434190;
+            box-shadow: 0 8px 20px rgba(67, 79, 206, 0.35);
+            transform: translateX(-2px);
+        }
+
         .toast {
             position: fixed;
             bottom: 24px;
@@ -605,6 +724,7 @@
             to { opacity: 0; transform: translate(-50%, 8px); }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -655,10 +775,40 @@
         </div>
     </div>
 
+    <div id="playerOverlay" class="modal-overlay player-overlay hidden" aria-hidden="true">
+        <div class="player-dialog" role="dialog" aria-modal="true">
+            <div class="player-header">
+                <div class="player-title" id="playerTitle">直播播放</div>
+                <button class="player-close" onclick="closePlayerModal()" aria-label="关闭播放器">✕</button>
+            </div>
+            <div class="player-body">
+                <div class="channel-tabs" aria-label="通道选择">
+                    <button class="channel-tab-btn" data-channel="1">通道 1</button>
+                    <button class="channel-tab-btn" data-channel="2">通道 2</button>
+                    <button class="channel-tab-btn" data-channel="3">通道 3</button>
+                    <button class="channel-tab-btn" data-channel="4">通道 4</button>
+                </div>
+                <video id="flvPlayer" class="player-video" controls autoplay playsinline></video>
+                <div class="player-meta">
+                    <span id="playerInfo"></span>
+                    <span id="playerStatus" class="player-status">等待播放</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let autoRefreshTimer = null;
         const AUDIO_VIDEO_FLAG = 2;
         const currentOrigin = `${window.location.protocol}//${window.location.host}`;
+        let flvPlayerInstance = null;
+        let playerOverlay = null;
+        let playerVideo = null;
+        let playerStatus = null;
+        let playerInfo = null;
+        let playerTitle = null;
+        let channelButtons = [];
+        let playbackContext = null;
 
         // 车牌颜色映射
         const vehicleColorMap = {
@@ -771,7 +921,182 @@
         }
 
         function buildPlaybackURL({ serverIP, serverPort, plate, color, channel, avFlag, authCode }) {
-            return `https://edgeone.ai/zh/tools/flv-player?videoUrl=${currentOrigin}/proxy/rtp.flv?url=http://${serverIP}:${serverPort}/${plate}.${color}.${channel}.${avFlag}.${authCode}`;
+            return `${currentOrigin}/proxy/rtp.flv?url=http://${serverIP}:${serverPort}/${plate}.${color}.${channel}.${avFlag}.${authCode}`;
+        }
+
+        function ensurePlayerElements() {
+            if (playerOverlay) return;
+            playerOverlay = document.getElementById('playerOverlay');
+            playerVideo = document.getElementById('flvPlayer');
+            playerStatus = document.getElementById('playerStatus');
+            playerInfo = document.getElementById('playerInfo');
+            playerTitle = document.getElementById('playerTitle');
+            channelButtons = Array.from(document.querySelectorAll('.channel-tab-btn'));
+            channelButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const val = Number(btn.dataset.channel);
+                    startPlaybackForChannel(val);
+                });
+            });
+
+            if (playerOverlay) {
+                playerOverlay.addEventListener('click', e => {
+                    if (e.target === playerOverlay) {
+                        closePlayerModal();
+                    }
+                });
+            }
+
+            document.addEventListener('keydown', e => {
+                if (e.key === 'Escape' && playerOverlay && !playerOverlay.classList.contains('hidden')) {
+                    closePlayerModal();
+                }
+            });
+        }
+
+        function setActiveChannelButton(channel) {
+            if (!channelButtons || channelButtons.length === 0) return;
+            channelButtons.forEach(btn => {
+                const val = Number(btn.dataset.channel);
+                btn.classList.toggle('active', val === channel);
+            });
+        }
+
+        function destroyFlvPlayer() {
+            if (flvPlayerInstance) {
+                try {
+                    flvPlayerInstance.unload();
+                    flvPlayerInstance.detachMediaElement();
+                    flvPlayerInstance.destroy();
+                } catch (err) {
+                    console.warn('销毁 flv 播放器失败', err);
+                }
+                flvPlayerInstance = null;
+            }
+        }
+
+        function startFlvPlayback(url) {
+            destroyFlvPlayer();
+            if (playerVideo) {
+                playerVideo.pause();
+                playerVideo.removeAttribute('src');
+                playerVideo.load();
+            }
+
+            if (playerOverlay) {
+                playerOverlay.classList.remove('hidden');
+                playerOverlay.setAttribute('aria-hidden', 'false');
+            }
+            if (playerStatus) {
+                playerStatus.textContent = '加载中...';
+            }
+
+            if (window.flvjs && flvjs.isSupported()) {
+                flvPlayerInstance = flvjs.createPlayer(
+                    { type: 'flv', url, isLive: true },
+                    { enableWorker: false }
+                );
+                flvPlayerInstance.attachMediaElement(playerVideo);
+                flvPlayerInstance.load();
+                flvPlayerInstance.play().catch(() => {});
+
+                flvPlayerInstance.on(flvjs.Events.METADATA_ARRIVED, () => {
+                    playerStatus.textContent = '直播流已就绪';
+                });
+                flvPlayerInstance.on(flvjs.Events.ERROR, (type, detail) => {
+                    playerStatus.textContent = `播放异常：${detail || type}`;
+                });
+                flvPlayerInstance.on(flvjs.Events.LOADING_COMPLETE, () => {
+                    playerStatus.textContent = '直播结束';
+                });
+            } else {
+                if (playerVideo) {
+                    playerVideo.src = url;
+                    playerVideo.play().catch(() => {});
+                }
+                if (playerStatus) {
+                    playerStatus.textContent = '当前环境不支持 flv.js，尝试原生播放';
+                }
+            }
+        }
+
+        function closePlayerModal() {
+            destroyFlvPlayer();
+            if (playerVideo) {
+                playerVideo.pause();
+                playerVideo.removeAttribute('src');
+                playerVideo.load();
+            }
+            playbackContext = null;
+            setActiveChannelButton(null);
+            if (playerOverlay) {
+                playerOverlay.classList.add('hidden');
+                playerOverlay.setAttribute('aria-hidden', 'true');
+            }
+        }
+
+        function startPlaybackForChannel(channel) {
+            if (!playbackContext) {
+                alert('暂无可播放的流');
+                return;
+            }
+            playbackContext.channel = channel;
+            setActiveChannelButton(channel);
+
+            const { serverIP, serverPort, vehicle, color, authCode } = playbackContext;
+            const url = buildPlaybackURL({
+                serverIP,
+                serverPort,
+                plate: vehicle,
+                color,
+                channel,
+                avFlag: AUDIO_VIDEO_FLAG,
+                authCode
+            });
+
+            if (playerTitle) {
+                playerTitle.textContent = `车辆 ${vehicle} - 通道 ${channel}`;
+            }
+            if (playerInfo) {
+                playerInfo.textContent = `服务器：${serverIP}:${serverPort} | 口令：${authCode || '无'}`;
+            }
+            startFlvPlayback(url);
+        }
+
+        function openLivePlayer(context) {
+            ensurePlayerElements();
+            if (!playerOverlay || !playerVideo || !playerStatus) {
+                alert('播放器初始化失败');
+                return;
+            }
+
+            destroyFlvPlayer();
+            if (playerVideo) {
+                playerVideo.pause();
+                playerVideo.removeAttribute('src');
+                playerVideo.load();
+            }
+
+            playbackContext = { ...context, channel: null };
+            setActiveChannelButton(null);
+
+            if (playerTitle) {
+                const vehicle = context?.vehicle || '';
+                playerTitle.textContent = vehicle ? `车辆 ${vehicle} - 选择通道` : '直播播放';
+            }
+            if (playerInfo) {
+                const serverIP = context?.serverIP || '';
+                const serverPort = context?.serverPort || '';
+                const authCode = context?.authCode || '';
+                playerInfo.textContent = serverIP ? `服务器：${serverIP}:${serverPort} | 口令：${authCode || '无'}` : '';
+            }
+            if (playerStatus) {
+                playerStatus.textContent = '请选择通道开始播放';
+            }
+            if (playerOverlay) {
+                playerOverlay.classList.remove('hidden');
+                playerOverlay.setAttribute('aria-hidden', 'false');
+            }
         }
 
         function showToast(message) {
@@ -887,25 +1212,13 @@
                 return;
             }
 
-            const channel = await pickChannel();
-            if (channel === null) {
-                return;
-            }
-
-            const url = buildPlaybackURL({
+            openLivePlayer({
                 serverIP,
                 serverPort,
-                plate: vehicle,
+                vehicle,
                 color,
-                channel,
-                avFlag: AUDIO_VIDEO_FLAG,
                 authCode
             });
-
-            // 新标签页打开
-            window.open(url, '_blank');
-            // copyToClipboard(url, button);
-            // showToast(`通道 ${channel} 播放地址已复制`);
         }
 
         // 获取车牌颜色信息
@@ -1005,7 +1318,7 @@
                                     data-server-port="${serverPort}"
                                     onclick="handlePlay(this)"
                                     ${playDisabled}
-                                    title="${canPlay ? '选择通道并复制播放地址' : '点播成功并返回视频地址后可用'}"
+                                    title="${canPlay ? '点播后弹窗播放' : '点播成功并返回视频地址后可用'}"
                                 >
                                     播放
                                 </button>
