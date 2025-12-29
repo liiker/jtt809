@@ -19,6 +19,7 @@ var (
 	subPort      = flag.Int("sub", 9000, "Sub Link Listen Port")
 	userID       = flag.Int("uid", 10001, "User ID")
 	password     = flag.String("pwd", "pass809", "Password")
+	gnssCenterID = flag.Int("gnss-center-id", 0x13572468, "CNSS Center ID")
 	myIP         = flag.String("ip", "127.0.0.1", "My IP for Sub Link")
 	vehicleNo    = flag.String("vehicle", "粤B12345", "Vehicle Plate Number")
 	vehicleColor = flag.Int("color", 2, "Vehicle Plate Color (1=Black, 2=Blue, 3=Yellow, 4=White, 9=Other)")
@@ -62,6 +63,7 @@ func main() {
 	}, jtt809.LoginRequest{
 		UserID:       uint32(*userID),
 		Password:     *password,
+		GnssCenterID: uint32(*gnssCenterID),
 		DownLinkIP:   *myIP,
 		DownLinkPort: uint16(*subPort),
 	})
