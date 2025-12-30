@@ -1,6 +1,7 @@
 /.gocache
 /.goccache
 /.vscode
+/build
 /server
 /simulator
 /cmd/server/server
