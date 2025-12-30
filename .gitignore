@@ -4,6 +4,9 @@
 /build
 /server
 /simulator
+/rabbit
+/jtt809
 /cmd/server/server
 /cmd/simulator/simulator
 /JT*
+*.exe

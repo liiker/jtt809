@@ -3,6 +3,7 @@ module github.com/zboyco/jtt809
 go 1.25.1
 
 require (
+	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zboyco/go-server v1.3.4-0.20251208070453-8e35fff23e7d
 	golang.org/x/text v0.31.0

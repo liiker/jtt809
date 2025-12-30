@@ -1,6 +1,6 @@
 # Makefile - Go交叉编译管理
 
-.PHONY: all build win win64 win32 linux linux64 linux32 mac clean test deps help
+.PHONY: all build win win64 win32 linux linux64 linux32 mac clean test deps rabbit help
 
 # 项目配置
 PROJECT_NAME := jtt809
@@ -84,6 +84,12 @@ dev:
 		$(MAIN_PACKAGE)
 	@echo "构建完成: ./$(PROJECT_NAME)"
 
+# 编译RabbitMQ测试客户端
+rabbit:
+	@echo "编译RabbitMQ测试客户端..."
+	go build -o rabbit ./cmd/rabbit
+	@echo "构建完成: ./rabbit"
+
 # 安装到GOPATH/bin
 install:
 	@echo "安装到GOPATH/bin..."
@@ -123,7 +129,7 @@ release: build compress
 # 清理
 clean:
 	@echo "清理构建文件..."
-	rm -rf build dist $(PROJECT_NAME)
+	rm -rf build dist $(PROJECT_NAME) rabbit
 	go clean
 
 # 显示帮助
@@ -139,6 +145,7 @@ help:
 	@echo "  make linux      - 构建Linux程序"
 	@echo "  make mac        - 构建macOS程序"
 	@echo "  make dev        - 本地开发构建"
+	@echo "  make rabbit     - 编译RabbitMQ测试客户端"
 	@echo "  make install    - 安装到GOPATH/bin"
 	@echo "  make compress   - 使用UPX压缩"
 	@echo "  make release    - 创建发布包"
