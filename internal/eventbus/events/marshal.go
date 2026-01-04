@@ -127,7 +127,7 @@ func MarshalWarnMsgAdptInfo(userID uint32, info *jtt809.WarnMsgAdptInfo) (EventT
 		WarnTime:         info.WarnTime.Format(time.RFC3339),
 		VehicleNo:        info.VehicleNo,
 		VehicleColor:     info.VehicleColor,
-		InfoContent:      fmt.Sprintf("len=%d", info.InfoLength),
+		InfoContent:      info.InfoContent,
 	}
 	return marshalEvent(EventTypeWarnMsgAdptInfo, userID, data)
 }

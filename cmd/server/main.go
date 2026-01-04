@@ -187,16 +187,16 @@ func main() {
 // parseConfig 解析命令行参数，返回标准化配置。
 func parseConfig() (server.Config, *rabbitmq.Config, error) {
 	var (
-		mainAddr    = flag.String("main", ":10709", "主链路监听地址，格式 host:port")
-		httpAddr    = flag.String("http", ":18080", "管理与调度 HTTP 地址")
-		idleSec     = flag.Int("idle", 300, "连接空闲超时时间，单位秒，<=0 表示不超时")
-		accountFS   server.MultiAccountFlag
+		mainAddr  = flag.String("main", ":10709", "主链路监听地址，格式 host:port")
+		httpAddr  = flag.String("http", ":18080", "管理与调度 HTTP 地址")
+		idleSec   = flag.Int("idle", 300, "连接空闲超时时间，单位秒，<=0 表示不超时")
+		accountFS server.MultiAccountFlag
 
 		// RabbitMQ 配置参数
-		rabbitmqURL          = flag.String("rabbitmq-url", "", "RabbitMQ 连接 URL，如: amqp://user:pass@localhost:5672/")
-		rabbitmqExchange     = flag.String("rabbitmq-exchange", "jtt809.events", "RabbitMQ 交换机名称")
-		rabbitmqVHost        = flag.String("rabbitmq-vhost", "/", "RabbitMQ 虚拟主机")
-		rabbitmqMaxReconnect = flag.Int("rabbitmq-max-reconnect", -1, "RabbitMQ 最大重连次数，-1 表示无限重连")
+		rabbitmqURL            = flag.String("rabbitmq-url", "", "RabbitMQ 连接 URL，如: amqp://user:pass@localhost:5672/")
+		rabbitmqExchange       = flag.String("rabbitmq-exchange", "jtt809.events", "RabbitMQ 交换机名称")
+		rabbitmqVHost          = flag.String("rabbitmq-vhost", "/", "RabbitMQ 虚拟主机")
+		rabbitmqMaxReconnect   = flag.Int("rabbitmq-max-reconnect", -1, "RabbitMQ 最大重连次数，-1 表示无限重连")
 		rabbitmqReconnectDelay = flag.Int("rabbitmq-reconnect-delay", 5, "RabbitMQ 重连延迟，单位秒")
 		rabbitmqRetryAttempts  = flag.Int("rabbitmq-retry-attempts", 3, "RabbitMQ 发布重试次数")
 	)
@@ -220,17 +220,17 @@ func parseConfig() (server.Config, *rabbitmq.Config, error) {
 	var rmqCfg *rabbitmq.Config
 	if *rabbitmqURL != "" {
 		rmqCfg = &rabbitmq.Config{
-			URL:                *rabbitmqURL,
-			VHost:              *rabbitmqVHost,
-			ExchangeName:       *rabbitmqExchange,
-			ExchangeType:       "topic",
-			MaxReconnect:       *rabbitmqMaxReconnect,
-			ReconnectDelay:     time.Duration(*rabbitmqReconnectDelay) * time.Second,
-			DeliveryMode:       2, // 持久化
-			RetryMaxAttempts:   *rabbitmqRetryAttempts,
-			RetryInitialDelay:  1 * time.Second,
-			RetryMaxDelay:      30 * time.Second,
-			RetryQueueSize:     1000,
+			URL:               *rabbitmqURL,
+			VHost:             *rabbitmqVHost,
+			ExchangeName:      *rabbitmqExchange,
+			ExchangeType:      "topic",
+			MaxReconnect:      *rabbitmqMaxReconnect,
+			ReconnectDelay:    time.Duration(*rabbitmqReconnectDelay) * time.Second,
+			DeliveryMode:      2, // 持久化
+			RetryMaxAttempts:  *rabbitmqRetryAttempts,
+			RetryInitialDelay: 1 * time.Second,
+			RetryMaxDelay:     30 * time.Second,
+			RetryQueueSize:    1000,
 		}
 	}
 
